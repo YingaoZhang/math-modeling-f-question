@@ -26,7 +26,8 @@ from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 from .diagnostics import (conflict_plot, diagnose_classifier_domain_shift,
                           inspect_a17_a18, run_conflict_diagnostics)
 from .extrapolation import (analyze_est_data_generation_mechanism,
-                            analyze_estimated_scales)
+                            analyze_estimated_scales,
+                            evaluate_exponential_split_sets)
 from .bridge import export_q2_bridge_interface
 from .quality_extensions import run_quality_extensions
 from .reporting import write_supplemental_report
@@ -478,6 +479,7 @@ def write_report(q_summary, critic, entropy, metrics, model_compare):
     joint_effects = pd.read_csv(OUT / "mixture_joint_transfer_effects.csv") if (OUT / "mixture_joint_transfer_effects.csv").exists() else pd.DataFrame()
     extrap = pd.read_csv(OUT / "estimated_loss_ranking_reversal_summary.csv") if (OUT / "estimated_loss_ranking_reversal_summary.csv").exists() else pd.DataFrame()
     scaling = pd.read_csv(OUT / "scaling_est_reverse_engineering.csv") if (OUT / "scaling_est_reverse_engineering.csv").exists() else pd.DataFrame()
+    appendix_eval = pd.read_csv(OUT / "appendix_split_exponential_metrics_summary.csv") if (OUT / "appendix_split_exponential_metrics_summary.csv").exists() else pd.DataFrame()
     shift = pd.read_csv(OUT / "conflict_classifier_domain_shift.csv") if (OUT / "conflict_classifier_domain_shift.csv").exists() else pd.DataFrame()
     if len(joint_effects):
         joint_summary = joint_effects.groupby("loss_domain", as_index=False).agg(
@@ -586,6 +588,14 @@ $$L_d = \\beta_{{0d}} + z^T\\beta_d + \\epsilon_d,\\qquad d=1,\\ldots,13.$$
 
 对 A12–A15 的共用 63 个配方，逐域 1M 对估算 10B/70B 的 Spearman 中位数分别为 {pd.read_csv(OUT / "estimated_loss_1m_cross_scale_by_domain.csv").query("scale == '10b'").spearman_1m_vs_estimated.median():.3f} / {pd.read_csv(OUT / "estimated_loss_1m_cross_scale_by_domain.csv").query("scale == '70b'").spearman_1m_vs_estimated.median():.3f}；先逐域 z 标准化再等权合成后的排序相关为 {extrap.loc[extrap.comparison.str.contains("1M vs 10b"), "spearman"].iloc[0]:.3f} / {extrap.loc[extrap.comparison.str.contains("1M vs 70b"), "spearman"].iloc[0]:.3f}。该证据提示配方相对排序具有一定保持性，但估算数据不提供跨尺度绝对 Loss 校准。
 
+### 按附录编号的固定指数模型评估
+
+为直接对应附录 A，以下补充实验固定使用 Data Mixing Laws 指数式 $L_d=c_d+k_d\exp(t_d^T p)$：A4–A5 的 1M 配比与 Loss 成对用于训练，域内正则强度沿用 A4–A5 内部五折 CV 结果；A6–A11 分别评估 1M、60M、1B，A12–A15 分别评估估算 10B、70B。每个尺度独立列出逐域 $R^2$ 与 MAE，再报告 13 域指标的算术均值（先逐域计算指标，不合并原始 Loss）。误差放大倍数定义为同域 MAE 相对 A6–A7 同尺度检验 MAE 的比值，再取域中位数。
+
+{markdown_table(appendix_eval)}
+
+`appendix_split_exponential_metrics_by_domain.csv` 给出 13 域完整结果，`appendix_split_exponential_predictions.csv.gz` 保存逐配方预测，图见 `fig_appendix_split_exponential_eval.png`。A6–A11 是未出现在 A4–A5 的新配方，可用于检验；A12–A15 的 63 个配方则与训练表配方逐行重复，因此这些数字只衡量固定配方的估算跨尺度偏差，不能作为独立配方外推精度或实验验证。A8–A11 也是不同模型规模的实测 Loss，明显的绝对误差放大说明 1M Loss 标度不可直接迁移；排序相关与绝对误差应分开解释。
+
 ### A12–A15 标度生成机制反演
 
 对 63 个共同配方逐域计算 $\\gamma=-\\log(L_N/L_{{1M}})/\\log(N/1M)$，并对三尺度的 $\\log L$ 做乘性标度拟合。估算表中逐域结果、相关置信区间和真实 1M→60M 对照见 `scaling_est_reverse_engineering.csv` 与 `scaling_est_gamma_by_recipe.csv`，图见 `fig_est_gamma_coupling.png`。估算数据的 gamma(10B) 与 gamma(70B) 高度一致，但与初始 Loss 的相关性按域差异明显；汇总相关是域-配方池化的描述性统计，不能视为独立样本。真实 1M→60M 对照未复现统一的高正相关，因此现有数据不支持“必然存在 r>0.90 的人工耦合”这一强断言；可以确认的是估算三点几乎严格落在乘性曲线上（估算域内中位 log-fit R²={scaling.loc[scaling.dataset == 'estimated', 'median_scaling_fit_r2'].median() if len(scaling) else float('nan'):.4f}），应将其作为估算机制特征而非实验规律。
@@ -593,6 +603,7 @@ $$L_d = \\beta_{{0d}} + z^T\\beta_d + \\epsilon_d,\\qquad d=1,\\ldots,13.$$
 ## 数据边界与可识别性
 
 - A12–A15 是估算数据；10B 与 70B 使用同一组配方 id，不作为独立实验结果。
+- A12–A15 与 A4–A5 的 63 个配方配置逐行相同；固定指数式在其上的评估是估算 Loss 的尺度诊断，不是新配方外推检验。
 - A2/A3 含有 A1 对应域记录，报告将全量结果用于题目要求的扩展对照，并另列去重非重叠估计；A2/A3 是扩展抽样而非独立外部验证。
 - A17 域摘要用于域先验。A18 原始文本样例覆盖 {len(a18_examples)} 个域，以下仅作定性构念核验；A18 不含 22 项质量信号，不能验证数值 Q，也不能作为冲突标签。
 
@@ -602,7 +613,7 @@ $$L_d = \\beta_{{0d}} + z^T\\beta_d + \\epsilon_d,\\qquad d=1,\\ldots,13.$$
 
 ## 输出文件
 
-逐域完整数据表、敏感性 CSV、模型指标、残差与预测散点图、域 Q 分布图均在 `outputs/q1/`。图中汇总散点只对每个域分别标准化后叠合，未平均原始 Loss。
+逐域完整数据表、敏感性 CSV、模型指标、残差与预测散点图、域 Q 分布图，以及按附录编号补充的指数模型逐域结果和误差放大图均在 `outputs/q1/`。图中汇总散点只对每个域分别标准化后叠合，未平均原始 Loss。
 """
     (OUT / "第一问_完整建模报告.md").write_text(body, encoding="utf-8")
 
@@ -720,6 +731,11 @@ def run(data_root: Path):
                                lambda_penalty=0.0, joint_effects=joint_effects)
     winners = model_compare.loc[model_compare.groupby("loss_domain").cv_rmse.idxmin()].copy()
     winners.to_csv(OUT / "selected_model_by_domain.csv", index=False)
+    exponential_alphas = (model_compare.loc[model_compare.model == "data_mixing_exponential"]
+                          .set_index("loss_domain").best_alpha.astype(float).to_dict())
+    exponential_alphas = {key.replace(LOSS_PREFIX, "").replace("_val_loss", ""): value
+                          for key, value in exponential_alphas.items()}
+    evaluate_exponential_split_sets(data_root, OUT, exponential_alphas, dm_law_predict)
     make_plots(quality, preds, residuals)
     q_summary["Q_length_weighted"] = pd.read_csv(OUT / "q_length_weighting_comparison.csv").set_index("domain").loc[q_summary.domain, "Q_length_weighted"].to_numpy()
     write_report(q_summary, critic, entropy, metrics, model_compare)

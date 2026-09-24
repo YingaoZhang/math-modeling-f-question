@@ -216,17 +216,19 @@ for caption, fname in [
     ('图 3  冲突阈值敏感性曲线。阈值越严格，冲突率越低；主口径采用域内 P75/P25。', 'conflict_threshold_curve.png'),
     ('图 4  arxiv 与 stackexchange 的分类器域偏移诊断。', 'fig_domain_shift_conflict.png'),
     ('图 5  A12–A15 估算标度指数 gamma 的耦合关系。', 'fig_est_gamma_coupling.png'),
-    ('图 6  各验证域独立 Loss 的预测值与实测值。', 'loss_scatter_by_domain.png'),
-    ('图 7  各验证域独立模型残差。', 'loss_residuals_by_domain.png'),
-    ('图 8  域内标准化后的跨尺度排序诊断。', 'loss_scatter_standardized_aggregate.png'),
+    ('图 6  按附录 A 编号划分的固定指数模型跨集合误差与相对放大倍数。', 'fig_appendix_split_exponential_eval.png'),
+    ('图 7  各验证域独立 Loss 的预测值与实测值。', 'loss_scatter_by_domain.png'),
+    ('图 8  各验证域独立模型残差。', 'loss_residuals_by_domain.png'),
+    ('图 9  域内标准化后的跨尺度排序诊断。', 'loss_scatter_standardized_aggregate.png'),
 ]:
     add_image(doc, fname, caption)
 
 doc.add_heading('四 结果图与数据文件索引', level=1)
-doc.add_paragraph('图 1–8 已嵌入本报告。为便于复核，原始表格和模型系数仍以 CSV/JSON 保存在 outputs/q1，不改变现有 44 个产物。关键文件包括：q_domain_summary.csv、q_domain_summary_A1_A2_A3_all.csv、quality_weight_comparison.csv、conflict_threshold_by_population.csv、conflict_pair_decomposition.csv、conflict_penalty_sensitivity.csv、model_form_comparison.csv、loss_metrics_by_domain_and_scale.csv、data_mixing_law_coefficients.csv、mixture_joint_transfer_effects.csv、scaling_est_reverse_engineering.csv、conflict_classifier_domain_shift.csv、q2_input_interface_bundle.json。')
+doc.add_paragraph('图 1–9 已嵌入本报告。为便于复核，原始表格和模型系数仍以 CSV/JSON 保存在 outputs/q1。关键文件包括：q_domain_summary.csv、q_domain_summary_A1_A2_A3_all.csv、quality_weight_comparison.csv、conflict_threshold_by_population.csv、conflict_pair_decomposition.csv、conflict_penalty_sensitivity.csv、model_form_comparison.csv、loss_metrics_by_domain_and_scale.csv、appendix_split_exponential_metrics_by_domain.csv、appendix_split_exponential_metrics_summary.csv、data_mixing_law_coefficients.csv、mixture_joint_transfer_effects.csv、scaling_est_reverse_engineering.csv、conflict_classifier_domain_shift.csv、q2_input_interface_bundle.json。')
 doc.add_heading('五 最终结论与边界', level=1)
 doc.add_paragraph('质量分应理解为冻结在 A1 经验分布上的相对质量刻度，不能直接与附件 B 的 Q_score 混用；跨附件 Loss 也必须经过桥接，不能把 The Pile 验证 Loss 与 Pythia 自有 val_loss 当作同一量尺。配比系数表示相对替代：提高一个域的比例必然从其他域挪出份额。四个没有直接 Loss 列的域只通过闭合和替代关系间接进入系数，不能解读为它们自身的直接预测效果。A12–A15 共用同一批 63 个配方，A2/A3 与 A1 存在完全重合的子抽样关系，均不应当被当作独立外部实验。')
 doc.add_paragraph('在独立同尺度检验上，指数模型优于线性基线；二次交互模型提供组合非加性诊断，但组合效应属于模型条件关联而非因果协同。跨尺度检验表明绝对 Loss 不可迁移，而域内排序仍保留，因此第二问应采用明确的桥接映射和尺度分层报告。')
+doc.add_paragraph('按附录编号的补充评估使用 A4–A5 训练、A6–A11 实测检验，并将 A12–A15 作为估算尺度诊断单列。A12–A15 的 63 个组成配方与训练配方逐行重复，因此其误差不能解释为独立配方外推能力。')
 
 doc.save(DOCX)
 print(DOCX)

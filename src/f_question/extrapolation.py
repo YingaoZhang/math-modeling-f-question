@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from scipy.stats import kendalltau, spearmanr
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 def _pearson(x: pd.Series, y: pd.Series) -> float:
@@ -256,5 +257,129 @@ def analyze_est_data_generation_mechanism(data_root: Path, out: Path | None = No
         rreal = _pearson(real.gamma_real_60m, real.loss_1m)
         print(f"【实证检验通过】估算 gamma(10B)-gamma(70B) pooled Pearson r={_pearson(pooled.gamma_10b, pooled.gamma_70b):.4f}")
         print(f"【实证检验通过】估算 gamma(10B)-1M Loss Pearson r={r10:.4f}; real 1M->60M control r={rreal:.4f}；未达到 r>0.90 人工耦合判据")
-        print(f"【实证检验通过】乘性标度三点 log-fit median R²={est.scaling_fit_r2.median():.4f}")
+        # Keep the console log ASCII-safe for the default Windows GBK console.
+        print(f"【实证检验通过】乘性标度三点 log-fit median R2={est.scaling_fit_r2.median():.4f}")
     return summary_frame, detail
+
+
+def evaluate_exponential_split_sets(
+    data_root: Path,
+    output_dir: Path,
+    alpha_by_domain: dict[str, float],
+    predictor,
+):
+    """Evaluate a fixed exponential mixing-law form on appendix splits.
+
+    The fit uses only the A4-A5 1M training pair.  Per-domain regularization
+    values are supplied from the training-only five-fold CV already run by
+    the main model-selection pipeline.  A6-A11 are observed held-out recipes;
+    A12-A15 are estimated outcomes for recipes repeated from training, so
+    their score is a scale extrapolation diagnostic rather than independent
+    recipe validation.
+    """
+    base = data_root / "A_data_value" / "regmix_tables"
+    train_mix = pd.read_csv(base / "train_mixture_1m.csv").set_index("index")
+    train_loss = pd.read_csv(base / "train_pile_loss_1m.csv").set_index("index")
+    mix_cols = [c for c in train_mix if c.startswith("train_the_pile_")]
+    train_map = _domain_map([c for c in train_loss if c.startswith("metric/the_pile_")])
+    train_ids = train_mix.index.intersection(train_loss.index)
+    x_train = train_mix.loc[train_ids, mix_cols].to_numpy(float)
+    train_signatures = {tuple(np.round(row, 12)) for row in x_train}
+
+    split_specs = [
+        ("A6-A7", "test_mixture_1m.csv", "test_pile_loss_1m.csv", "1M", "observed held-out"),
+        ("A8-A9", "test_mixture_60m.csv", "test_pile_loss_60m.csv", "60M", "observed cross-scale"),
+        ("A10-A11", "test_mixture_1B.csv", "test_pile_loss_1B.csv", "1B", "observed cross-scale"),
+        ("A12-A13", "est_mixture_10b.csv", "est_pile_loss_10b.csv", "10B", "estimated cross-scale"),
+        ("A14-A15", "est_mixture_70b.csv", "est_pile_loss_70b.csv", "70B", "estimated cross-scale"),
+    ]
+    details = []
+    predictions = []
+    for appendix_pair, mix_name, loss_name, scale, status in split_specs:
+        mix = pd.read_csv(base / mix_name).set_index("index")
+        loss = pd.read_csv(base / loss_name).set_index("index")
+        ids = mix.index.intersection(loss.index)
+        split_cols = [c for c in mix if c.startswith("train_the_pile_")]
+        if set(split_cols) != set(mix_cols):
+            raise ValueError(f"Composition columns differ in {appendix_pair}")
+        split_mix = mix.loc[ids, mix_cols].to_numpy(float)
+        split_loss_map = _domain_map([c for c in loss if c.startswith("metric/the_pile_")])
+        signatures = [tuple(np.round(row, 12)) for row in split_mix]
+        overlap_n = sum(signature in train_signatures for signature in signatures)
+        for domain, train_y_col in train_map.items():
+            if domain not in split_loss_map or domain not in alpha_by_domain:
+                continue
+            y_train = train_loss.loc[train_ids, train_y_col].to_numpy(float)
+            y_true = loss.loc[ids, split_loss_map[domain]].to_numpy(float)
+            y_pred = predictor(x_train, y_train, split_mix, float(alpha_by_domain[domain]))
+            details.append({
+                "appendix_pair": appendix_pair,
+                "scale": scale,
+                "data_status": status,
+                "loss_domain": domain,
+                "n": len(ids),
+                "exact_recipe_overlap_with_A4_A5": overlap_n,
+                "alpha_from_training_cv": float(alpha_by_domain[domain]),
+                "r2": float(r2_score(y_true, y_pred)),
+                "rmse": float(mean_squared_error(y_true, y_pred) ** 0.5),
+                "mae": float(mean_absolute_error(y_true, y_pred)),
+                "spearman": float(pd.Series(y_true).corr(pd.Series(y_pred), method="spearman")),
+            })
+            predictions.extend({
+                "appendix_pair": appendix_pair,
+                "scale": scale,
+                "data_status": status,
+                "loss_domain": domain,
+                "recipe_index": int(recipe_id),
+                "loss_observed": float(actual),
+                "loss_predicted": float(predicted),
+            } for recipe_id, actual, predicted in zip(ids, y_true, y_pred))
+
+    detail = pd.DataFrame(details)
+    baseline = detail.loc[detail.appendix_pair == "A6-A7", ["loss_domain", "mae"]].rename(
+        columns={"mae": "A6_A7_mae"})
+    detail = detail.merge(baseline, on="loss_domain", how="left")
+    detail["error_amplification_vs_A6_A7"] = detail.mae / detail.A6_A7_mae.replace(0, np.nan)
+    summary = detail.groupby(["appendix_pair", "scale", "data_status"], as_index=False).agg(
+        domains_evaluated=("loss_domain", "nunique"),
+        recipe_count=("n", "first"),
+        mean_domain_r2=("r2", "mean"),
+        median_domain_r2=("r2", "median"),
+        mean_domain_mae=("mae", "mean"),
+        median_domain_mae=("mae", "median"),
+        mean_domain_rmse=("rmse", "mean"),
+        mean_domain_spearman=("spearman", "mean"),
+        median_domain_error_amplification=("error_amplification_vs_A6_A7", "median"),
+        exact_recipe_overlap_with_A4_A5=("exact_recipe_overlap_with_A4_A5", "first"),
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    detail.to_csv(output_dir / "appendix_split_exponential_metrics_by_domain.csv", index=False)
+    summary.to_csv(output_dir / "appendix_split_exponential_metrics_summary.csv", index=False)
+    pd.DataFrame(predictions).to_csv(output_dir / "appendix_split_exponential_predictions.csv.gz", index=False)
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    order = ["A6-A7", "A8-A9", "A10-A11", "A12-A13", "A14-A15"]
+    summary = summary.set_index("appendix_pair").loc[order].reset_index()
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
+    colors = ["#2878B5", "#54A24B", "#ECA82C", "#D45087", "#8A6BBE"]
+    axes[0].bar(summary.appendix_pair, summary.mean_domain_mae, color=colors)
+    axes[0].set_ylabel("Mean of per-domain MAE")
+    axes[0].set_title("Exponential model error by appendix split")
+    axes[0].tick_params(axis="x", rotation=25)
+    amps = summary.median_domain_error_amplification
+    axes[1].bar(summary.appendix_pair, amps, color=colors)
+    axes[1].axhline(1, color="black", lw=1, ls="--")
+    axes[1].set_ylabel("Median domain MAE / A6-A7 MAE")
+    axes[1].set_title("Error amplification relative to 1M holdout")
+    axes[1].tick_params(axis="x", rotation=25)
+    fig.tight_layout()
+    fig.savefig(output_dir / "fig_appendix_split_exponential_eval.png", dpi=220)
+    plt.close(fig)
+    print("【实证检验通过】固定 data-mixing 指数式已按 A4-A5 训练、按 A6-A11 与 A12-A15 分组评估")
+    print("【实证检验通过】A12-A15 recipe overlap with A4-A5:",
+          int(summary.loc[summary.appendix_pair.isin(["A12-A13", "A14-A15"]),
+                          "exact_recipe_overlap_with_A4_A5"].max()),
+          "/", int(summary.loc[summary.appendix_pair == "A6-A7", "recipe_count"].iloc[0]))
+    return detail, summary, pd.DataFrame(predictions)
