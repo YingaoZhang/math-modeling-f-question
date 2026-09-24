@@ -114,9 +114,11 @@ def main():
     para(d, "B2 原始绝对 Loss 受模型族和验证集偏移影响，仿射重标定只作为同一外部数据集内的校准诊断；B4/B5 的排序相关性比绝对 R² 更稳定。因此可迁移的是相对排序和趋势，不能把 B1 截距直接当成所有模型族的共同标尺。")
 
     d.add_heading("5 Qscore 物理纠偏与低端饱和", 1)
-    para(d, "线性中心化模型和其镜像形式的预测值完全相同，镜像并不能改变偏导符号。主模型采用 q_defect=Q_score、q_quality=1-q_defect：L=c+A N^-alpha+B D^-beta+gamma q_defect^theta。于是 ∂L/∂q_defect=gamma theta q_defect^(theta-1)>0，∂L/∂q_quality<0；当 q_quality→1 时缺陷项趋于零，退化为经典 N-D 标度律。alpha、beta 围绕 B1 的 0.339957、0.279878 采用惩罚项松弛，lambda 取 0、0.1、1、10。")
+    para(d, "线性中心化模型和其镜像形式的预测值完全相同，镜像并不能改变偏导符号。下表逐行给出两种写法的 R²、MAE 和最大预测差，数值相同且预测差为机器精度量级；因此不能把 Q_quality=1-Q_score 或 |Q_score-1| 当作物理纠偏。主模型采用 q_defect=Q_score、q_quality=1-q_defect：L=c+A N^-alpha+B D^-beta+gamma q_defect^theta。于是 ∂L/∂q_defect=gamma theta q_defect^(theta-1)>0，∂L/∂q_quality<0；当 q_quality→1 时缺陷项趋于零，退化为经典 N-D 标度律。alpha、beta 围绕 B1 的 0.339957、0.279878 采用惩罚项松弛，lambda 取 0、0.1、1、10。")
     qtab = pd.read_csv(OUT / "q2_quality_effect_coefficients.csv")
     table(d, qtab[["lambda", "c", "A", "B", "gamma", "alpha", "beta", "theta", "alpha_minus_B1", "beta_minus_B1", "r2", "mae"]], digits=6, max_rows=8)
+    d.add_page_break()
+    table(d, pd.read_csv(OUT / "q2_quality_mirror_equivalence.csv"), digits=9, max_rows=4)
     table(d, pd.read_csv(OUT / "q2_quality_direction_diagnostics.csv"), digits=6, max_rows=5)
     fig(d, "fig_q2_quality_effect.png", "图 4 原生 Qscore 缺陷率与验证 Loss")
     low = pd.read_csv(OUT / "q2_low_q_saturation_check.csv")

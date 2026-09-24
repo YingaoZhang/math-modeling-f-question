@@ -11,6 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_absolute_error, r2_score
 
 from .q2_scaling import (fit_classic_scaling, cross_validate_classic,
                          fit_quality_effect, fit_asymmetric_quality_effect,
@@ -96,6 +97,32 @@ def run() -> dict:
     q_all = pd.concat(q_frames, ignore_index=True).drop_duplicates(subset=["experiment_id"])
     linear_coef, linear_pred = fit_quality_effect(q_all, model)
     linear_coef.to_csv(OUT / "q2_quality_linear_diagnostic.csv", index=False)
+    # Q_quality=1-Q_score and |Q_score-1| differ only by a sign convention.
+    # Re-express the centered linear model in the mirrored coordinate so that
+    # the identical fitted values and metrics are explicit in the deliverables.
+    q0_linear = float(linear_coef["Q0_native"].iloc[0])
+    coef_linear = linear_coef.set_index("coefficient")["value"]
+    x_centered = q_all.Q_score.to_numpy(float) - q0_linear
+    x_mirrored = (1.0 - q_all.Q_score.to_numpy(float)) - (1.0 - q0_linear)
+    original_pred = (coef_linear["intercept"] + coef_linear["N_term"] * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
+                     + coef_linear["D_term"] * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1])
+                     + coef_linear["Q_centered"] * x_centered
+                     + coef_linear["QxN_term"] * x_centered * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
+                     + coef_linear["QxD_term"] * x_centered * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1]))
+    mirrored_pred = (coef_linear["intercept"] + coef_linear["N_term"] * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
+                     + coef_linear["D_term"] * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1])
+                     - coef_linear["Q_centered"] * x_mirrored
+                     - coef_linear["QxN_term"] * x_mirrored * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
+                     - coef_linear["QxD_term"] * x_mirrored * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1]))
+    mirror_metrics = pd.DataFrame([
+        {"form": "centered Q_score", "r2": float(r2_score(q_all.val_loss, original_pred)),
+         "mae": float(mean_absolute_error(q_all.val_loss, original_pred)),
+         "max_abs_prediction_difference_vs_centered": 0.0},
+        {"form": "mirrored |Q_score-1| = 1-Q_score", "r2": float(r2_score(q_all.val_loss, mirrored_pred)),
+         "mae": float(mean_absolute_error(q_all.val_loss, mirrored_pred)),
+         "max_abs_prediction_difference_vs_centered": float(np.max(np.abs(mirrored_pred - original_pred)))},
+    ])
+    mirror_metrics.to_csv(OUT / "q2_quality_mirror_equivalence.csv", index=False)
     q_sensitivity, q_pred, sign = fit_asymmetric_quality_effect(q_all, model)
     q_sensitivity.to_csv(OUT / "q2_quality_effect_coefficients.csv", index=False)
     q_pred.to_csv(OUT / "q2_quality_predictions.csv", index=False)
