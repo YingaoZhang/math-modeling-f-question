@@ -1,0 +1,2 @@
+n_domains,n_observed_domains,n_median_imputed_domains,median_imputation_value,Qbar_variance_with_imputation,Qbar_variance_observed_only_reclosed,variance_loss_fraction_vs_observed_only,interpretation
+17,3,14,0.5425290965983053,0.002704811155857594,0.03156722560382768,0.9143158416959638,Q_bar is weak evidence because most domains lack document-level quality observations

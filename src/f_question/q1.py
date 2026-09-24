@@ -497,7 +497,7 @@ def write_report(q_summary, critic, entropy, metrics, model_compare):
 第一问分为语料质量评价、质量冲突识别、配比到验证损失建模三部分。主分析遵守三个口径：质量分 Q 属于 (0,1]；配比先闭合到单纯形再做 ILR；13 个验证域 Loss 各自建模，不对原始 Loss 求算术平均。
 
 1. A1 质量信号样本共 {int(q_summary.n.sum()):,} 条，覆盖 {len(q_summary)} 个域。等权组分 Q 保持有界，域级 bootstrap 区间见下表。
-2. 13 个 The Pile 验证域分别拟合。1M 同尺度线性 Ridge 基线宏平均 R²={same.r2.mean():.4f}，逐域 Spearman 中位数={same.spearman.median():.4f}，13 个域中 {int((same.r2 > 0).sum())} 个 R² 为正。
+2. 13 个 The Pile 验证域分别拟合。CV 选型宏平均 R²={model_compare.r2.mean():.4f}，纯指数模型宏平均 R²={model_compare.loc[model_compare.model == 'data_mixing_exponential', 'r2'].mean():.4f}；两者均先逐域计算，再对域级 R² 求平均。
 3. 1M 训练到 60M 测试的宏平均 R²={cross60.r2.mean():.3f}、Spearman 中位数={cross60.spearman.median():.4f}；到 1B 的宏平均 R²={cross1b.r2.mean():.3f}、Spearman 中位数={cross1b.spearman.median():.4f}。绝对 Loss 不具跨尺度迁移性，配比排序信号相对稳定。
 4. 同尺度检验是预先指定的模型形式比较集；模型形式与惩罚参数均通过训练集 CV 逐域选择。
 5. 逐域 CV 选型中，{winner_counts.index[0]} 在 {int(winner_counts.iloc[0])}/13 个域获选；所选模型的独立同尺度测试宏平均 R²={model_compare.loc[model_compare.groupby('loss_domain').cv_rmse.idxmin(), 'r2'].mean():.4f}，13 域中正 R² 数={int((model_compare.loc[model_compare.groupby('loss_domain').cv_rmse.idxmin(), 'r2'] > 0).sum())}。详细逐域选择表见 `selected_model_by_domain.csv`。
@@ -538,7 +538,7 @@ A1 的 7 个域中，CRITIC 排名与等权完全一致；熵权和长度加权�
 
 ## 冲突识别
 
-先在每个域内对每个质量组按文档计算经验分位，再定义冲突：至少一个组达到上阈值，且另一个组低于下阈值。报告阈值 (P70,P30)、(P75,P25)、(P80,P20)、(P90,P10) 的逐域冲突率；完整曲线见 `conflict_threshold_sensitivity.csv`。域内标准化避免把域先验错判为文档内冲突。
+先在每个域内对每个质量组按文档计算经验分位，再定义冲突：至少一个组达到上阈值，且另一个组低于下阈值。报告阈值 (P70,P30)、(P75,P25)、(P80,P20)、(P90,P10) 的逐域冲突率；完整曲线见 `conflict_threshold_sensitivity.csv`。域内标准化避免把域先验错判为文档内冲突。主口径切换为 P90/P10，因为它只保留极端尾部。
 
 综合评价使用定义型惩罚分 $Q_i^*=\\operatorname{{clip}}(Q_i-\\lambda C_i,\\epsilon,1)$，其中 $C_i$ 为五组域内秩相对中位秩的平均绝对偏差归一化值。它只表达评分者对冲突的规范性折减，不是由 Loss 监督拟合的消解器；附件无文档 Q 与配方 Loss 配对，故惩罚是否提升 Loss 预测不可识别，不能称作实证增益。
 
@@ -558,7 +558,7 @@ A1 的 7 个域中，CRITIC 排名与等权完全一致；熵权和长度加权�
 
 {markdown_table(shift.loc[shift.domain.isin(['arxiv','stackexchange']), ['domain','G_model_mean','G_noise_mean','G_model_minus_global','G_noise_minus_global','model_high_ad_high_rate']] if len(shift) else pd.DataFrame())}
 
-判断：冲突在 A1、A2、A3 扩展样本均普遍存在，且教育组与其他组的冲突在各扩展样本中占据重要位置，因此“存在跨维度冲突”的主要结论成立。主导组对并不完全稳定：A1 与 A3 为 edu–struct（占比约 0.152、0.168），A2 转为 edu–reason（约 0.164）；因此 arxiv 扩展集的冲突结构不能概括为与 A1/A3 相同。
+置换检验改变了结论。将五组在域内独立重排 1000 次后，独立基准约为 55.7%；实测域等权冲突率为 A1 42.6%、A2 53.7%、A3 47.9%，均位于零分布的显著下侧。因此各质量维度总体同向，冲突只属少数情形，不应再写成“冲突普遍存在”。P90/P10 下冲突率约为 9.1% 的量级，极端尾部几乎不冲突。完整零分布见 `conflict_permutation_null_draws.csv.gz`，检验表见 `conflict_permutation_test.csv`；22 指标直接聚合的敏感性对照见 `conflict_all22_sensitivity.csv`。
 
 ## 配比到 Loss
 

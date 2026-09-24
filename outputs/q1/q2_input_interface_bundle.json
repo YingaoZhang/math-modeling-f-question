@@ -60,6 +60,7 @@
     "uspto_backgrounds": "median_imputed_no_document_quality"
   },
   "Q0_train_recipe_mean": 0.5488402103104655,
+  "Qbar_imputation_diagnostic": "qbar_imputation_variance_loss.csv",
   "first_order_substitution_vector_t": {
     "arxiv": -0.11019229445025987,
     "freelaw": -0.17512206332205096,

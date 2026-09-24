@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from .conflicts import GROUPS, THRESHOLDS, conflict_details, conflict_severity_from_ranks, penalized_score, summarize_conflicts
+from .conflicts import (GROUPS, THRESHOLDS, conflict_details,
+                        conflict_severity_from_ranks, domain_equal_conflict_rate,
+                        penalized_score, permutation_conflict_null,
+                        summarize_conflicts)
 from .indicators import indicator_protocol
 
 
@@ -47,6 +50,67 @@ def run_conflict_diagnostics(a_dir: Path, quality_a1: pd.DataFrame, a1_raw: pd.D
     pair_table.sort_values(["dataset", "count"], ascending=[True, False]).groupby("dataset", as_index=False).head(10).to_csv(
         out / "conflict_pair_top10.csv", index=False)
     pd.DataFrame(cause_rows).to_csv(out / "conflict_cause_edu_ad_cooccurrence.csv", index=False)
+
+    # Test the original "conflict is prevalent" claim against a domain-preserving
+    # independence null.  Domain-equal aggregation is used so large web domains
+    # do not dominate the conclusion.
+    perm_rows, perm_draws = [], []
+    populations_for_null = [("A1", quality_a1)]
+    for dataset, filename, domain in extension_specs:
+        raw = quality_raw_frame(a_dir / filename, fallback=domain)
+        scored, _ = score_quality(raw, references=references)
+        populations_for_null.append((dataset, scored))
+    for dataset, frame in populations_for_null:
+        observed = domain_equal_conflict_rate(frame, .75, .25)
+        null = permutation_conflict_null(frame, 1000, .75, .25,
+                                         seed=20260924 + len(dataset))
+        null_rate = null.macro_conflict_rate
+        perm_rows.append({"dataset": dataset, "threshold": "P75/P25",
+                          "observed_macro_conflict_rate": observed,
+                          "null_mean": null_rate.mean(),
+                          "null_sd": null_rate.std(ddof=1),
+                          "null_q025": null_rate.quantile(.025),
+                          "null_q975": null_rate.quantile(.975),
+                          "permutation_p_lower": (1 + int((null_rate <= observed).sum())) / (len(null_rate) + 1),
+                          "interpretation": "observed rate is below independent-group baseline" if observed < null_rate.mean() else "observed rate is not below independent-group baseline"})
+        null.insert(0, "dataset", dataset)
+        perm_draws.append(null)
+    pd.DataFrame(perm_rows).to_csv(out / "conflict_permutation_test.csv", index=False)
+    pd.concat(perm_draws, ignore_index=True).to_csv(out / "conflict_permutation_null_draws.csv.gz", index=False, compression="gzip")
+
+    # P90/P10 is the primary tail definition: it isolates the small extreme
+    # tail and avoids presenting ordinary rank variation as a systemic conflict.
+    pd.DataFrame([{
+        "dataset": dataset,
+        "threshold": "P90/P10",
+        "observed_macro_conflict_rate": domain_equal_conflict_rate(frame, .90, .10),
+        "n_domains": frame.domain.nunique(),
+        "n_records": len(frame),
+        "interpretation": "extreme-tail conflict sensitivity"
+    } for dataset, frame in populations_for_null]).to_csv(out / "conflict_p90_p10_summary.csv", index=False)
+
+    # Sensitivity to using every one of the 22 mapped signals directly rather
+    # than first averaging them into five semantic groups.
+    indicator_q = [c for c in quality_a1.columns if c.endswith("__q")]
+    sensitivity_rows = []
+    for domain, group in quality_a1.groupby("domain", dropna=False):
+        q22 = group[indicator_q].mean(axis=1)
+        q5 = group[GROUPS].mean(axis=1)
+        for name, q in [("five_group_equal", q5), ("all_22_indicator_equal", q22)]:
+            rr = pd.DataFrame({"x": q, **{g: group[g].to_numpy() for g in GROUPS}}, index=group.index)
+            sensitivity_rows.append({"dataset": "A1", "domain": domain,
+                                     "n": len(group), "score_definition": name,
+                                     "Q_mean": float(q.mean()),
+                                     "conflict_P75_P25": np.nan,
+                                     "conflict_P90_P10": float(((group[GROUPS].rank(pct=True).ge(.90).any(axis=1)) & (group[GROUPS].rank(pct=True).le(.10).any(axis=1))).mean()) if name == "five_group_equal" else float(((group[indicator_q].rank(pct=True).ge(.90).any(axis=1)) & (group[indicator_q].rank(pct=True).le(.10).any(axis=1))).mean())})
+    sens = pd.DataFrame(sensitivity_rows)
+    # Fill the P75/P25 column with the matching definition after construction.
+    for idx, row in sens.iterrows():
+        g = quality_a1[quality_a1.domain == row.domain]
+        cols = GROUPS if row.score_definition == "five_group_equal" else indicator_q
+        rank = g[cols].rank(pct=True)
+        sens.loc[idx, "conflict_P75_P25"] = float((rank.ge(.75).any(axis=1) & rank.le(.25).any(axis=1)).mean())
+    sens.to_csv(out / "conflict_all22_sensitivity.csv", index=False)
 
     # Lambda is a descriptive sensitivity because document Q is not paired to recipe Loss.
     penalty_rows = []

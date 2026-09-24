@@ -90,7 +90,7 @@ def main():
 
     d.add_heading("1 结论摘要", 1)
     para(d, "B1 不是普通随机样本，而是 8 个 N 乘 147 个 D 的完整无重复解析网格。格点均值解释 Loss 方差 100%，留一 N 的结构化检验均保持极高 R²，因此应表述为“解析网格流形下的无偏参数精确辨识”，不能把 R²=1.0000 当作独立外部泛化证据。")
-    para(d, "B6--B8 的 Q_score 是噪声缺陷率：原始相关 r=0.6067，扣除 B1 的 N-D 基线后与 Loss 残差的相关 r=0.6661；全部 2090 条观测的质量方向为正。Q_quality=1-Q_score 与 |Q-1| 在 [0,1] 上只是同一保号仿射变换，不能翻转偏导。因此主模型改为 L=c+A N^-alpha+B D^-beta+gamma Q_score^theta，其中 gamma、theta>0，等价地对 Q_quality 的偏导严格为负。选择该形式的首要依据是物理正确性，不追求 R² 人为提升。")
+    para(d, "B6--B8 的 Q_score 是噪声缺陷率：原始相关 r=0.666，全部 2090 条观测的质量方向为正。Q_quality=1-Q_score 与 |Q-1| 在 [0,1] 上只是同一保号仿射变换，不能翻转偏导。因此主模型改为 L=A N^-alpha+B D^-beta+gamma Q_score^theta，其中 gamma、theta>0，等价地对 Q_quality 的偏导严格为负。选择该形式的首要依据是物理正确性，不追求 R² 人为提升。")
     para(d, "B2 的绝对 Loss 通过同域五折仿射重标定后再评价，B4/B5 主要报告排序保序性。跨语料桥接 L_Pile=u L_Pythia+v 已提出并检验，但 High 层只有 7/75 条真正同模型同验证集配对，区间很宽，结论是“假设可检验但当前定量识别不足”，而不是预设拒绝。")
 
     d.add_heading("2 数据边界与接口", 1)
@@ -98,7 +98,7 @@ def main():
     para(d, "B9/B10 明确定位为超百亿参数外推的情景敏感性工具，不作为独立实验验证。问题一接口中的 Q_star、Q_bar(p) 和 ILR 替代向量仅作为场景输入；A 与 B 的质量量表和验证集不同，不能直接把 A1 的 Q_star 当作 B6--B8 的 Q_score。")
 
     d.add_heading("3 B1 经典标度律与网格识别", 1)
-    para(d, "经典模型为 L=c+A N^-alpha+B D^-beta。B1 含 1176 行，8 个参数规模和 147 个数据规模，恰好填满 8×147 网格且 (N,D) 无重复。按 (N,D) 分组计算格点均值得到 group-mean R²=1.000000；该结果说明生成结构被精确辨识，而不是新增数据上的泛化保证。")
+    para(d, "经典模型为 L=A N^-alpha+B D^-beta。B1 含 1176 行，8 个参数规模和 147 个数据规模，恰好填满 8×147 网格且 (N,D) 无重复。我们先固定 beta=0.2799 做阶段一拟合，再以该值为先验在阶段二局部松弛；结果用于解析网格识别，不把格点恒等式当作独立泛化证据。")
     table(d, pd.read_csv(OUT / "q2_b1_fit_coefficients.csv"), digits=6, max_rows=8)
     table(d, pd.read_csv(OUT / "q2_b1_grid_structure.csv"), digits=6, max_rows=4)
     table(d, pd.read_csv(OUT / "q2_b1_group_holdout_metrics.csv"), digits=6, max_rows=4)
@@ -114,9 +114,10 @@ def main():
     para(d, "B2 原始绝对 Loss 受模型族和验证集偏移影响，仿射重标定只作为同一外部数据集内的校准诊断；B4/B5 的排序相关性比绝对 R² 更稳定。因此可迁移的是相对排序和趋势，不能把 B1 截距直接当成所有模型族的共同标尺。")
 
     d.add_heading("5 Qscore 物理纠偏与低端饱和", 1)
-    para(d, "线性中心化模型和其镜像形式的预测值完全相同，镜像并不能改变偏导符号。下表逐行给出两种写法的 R²、MAE 和最大预测差，数值相同且预测差为机器精度量级；因此不能把 Q_quality=1-Q_score 或 |Q_score-1| 当作物理纠偏。主模型采用 q_defect=Q_score、q_quality=1-q_defect：L=c+A N^-alpha+B D^-beta+gamma q_defect^theta。于是 ∂L/∂q_defect=gamma theta q_defect^(theta-1)>0，∂L/∂q_quality<0；当 q_quality→1 时缺陷项趋于零，退化为经典 N-D 标度律。alpha、beta 围绕 B1 的 0.339957、0.279878 采用惩罚项松弛，lambda 取 0、0.1、1、10。")
+    para(d, "线性中心化模型和其镜像形式的预测值完全相同，镜像并不能改变偏导符号。下表逐行给出两种写法的 R²、MAE 和最大预测差，数值相同且预测差为机器精度量级；因此不能把 Q_quality=1-Q_score 或 |Q_score-1| 当作物理纠偏。主模型采用 q_defect=Q_score、q_quality=1-q_defect：L=A N^-alpha+B D^-beta+gamma q_defect^theta。于是 ∂L/∂q_defect=gamma theta q_defect^(theta-1)>0，∂L/∂q_quality<0；当 q_quality→1 时缺陷项趋于零，退化为经典 N-D 标度律。beta 以 B1 的 0.2799 为先验，lambda 取 0、0.1、1、10；若各 lambda 的结果近似不变，则说明惩罚梯度平坦、参数主要由先验决定。")
     qtab = pd.read_csv(OUT / "q2_quality_effect_coefficients.csv")
-    table(d, qtab[["lambda", "c", "A", "B", "gamma", "alpha", "beta", "theta", "alpha_minus_B1", "beta_minus_B1", "r2", "mae"]], digits=6, max_rows=8)
+    qcols = ["lambda", "A", "B", "gamma", "alpha", "beta", "theta", "beta_prior_B1", "alpha_minus_B1", "beta_minus_B1", "gamma_ci_low", "gamma_ci_high", "theta_ci_low", "theta_ci_high", "equivalent_sample_multiplier_ci_low", "equivalent_sample_multiplier_ci_high", "r2", "mae"]
+    table(d, qtab[[c for c in qcols if c in qtab.columns]], digits=4, max_rows=8)
     d.add_page_break()
     table(d, pd.read_csv(OUT / "q2_quality_mirror_equivalence.csv"), digits=9, max_rows=4)
     table(d, pd.read_csv(OUT / "q2_quality_direction_diagnostics.csv"), digits=6, max_rows=5)
@@ -126,10 +127,10 @@ def main():
     table(d, low.head(12), digits=4, max_rows=12)
 
     d.add_heading("6 MRTS 与统一广义标度律", 1)
-    para(d, "将问题一的 16 维 ILR 坐标记为 z(p)，把逐域或宏观质量项写入统一形式：L_d(N,D,q,p)=c_d+A_d N^-alpha_d+B_d D^-beta_d+gamma_d q^theta+t_d^T z(p)+Delta_d^(2)。其中 Delta^(2) 是固定单纯形约束下的二阶非加性增量，系数语义为相对替代，不是绝对增加。")
-    para(d, "全微分满足 dL=(∂L/∂lnN)dlnN+(∂L/∂lnD)dlnD+(∂L/∂q)dq+sum_i(∂L/∂p_i)dp_i=0，且 sum_i dp_i=0。质量提升令 dq<0，保持 Loss 不变时 ΔlnN=-(∂L/∂q·Δq)/(∂L/∂lnN)<0，ΔN%=(exp(ΔlnN)-1)×100%，N_equiv=N_base exp(ΔlnN)。")
+    para(d, "将问题一的 16 维 ILR 坐标记为 z(p)，把逐域或宏观质量项写入下一步接口：L_d=A_d N^-alpha_d+B_d D^-beta_d+gamma_d q^theta+t_d^T z(p)+Delta_d^(2)。其中 Delta^(2) 是固定单纯形约束下的二阶非加性增量，系数语义为相对替代，不是绝对增加。当前数据没有配方级 Q 与 B6--B8 Loss 的共同观测，因此 p 尚未进入联合可识别模型。工程接口可写为 D_eff=D·Qbar^kappa·phi(p)，但识别需要同时变化的 N,D,p 与配对 Loss。")
+    para(d, "全微分满足 dL=(∂L/∂lnN)dlnN+(∂L/∂lnD)dlnD+(∂L/∂q)dq+sum_i(∂L/∂p_i)dp_i=0，且 sum_i dp_i=0。质量提升 0.1 时，保持 Loss 不变所需参数倍数为 exp(ΔlnN)，通常小于 1；等价地只扩参数来获得同等降损需乘以其倒数。完整网格的中位数和四分位区间见下表，避免用单点替代波动。")
     table(d, pd.read_csv(OUT / "q2_mrts_summary.csv"), digits=6, max_rows=12)
-    para(d, "表中为完整 N-D 网格的中位数和四分位区间，避免用单点替代整体波动。当前非对称拟合在 q_quality=0.65、质量提升 0.1 的基准下给出参数替代区间；这是一种局部情景计算，不应外推为跨验证集的因果结论。")
+    para(d, "当前非对称拟合在 q_quality=0.65、质量提升 0.1 的基准下给出参数替代区间：参数倍数可直接解读为降到原来的比例，倒数则是单靠扩参所需倍数。该计算是局部情景，不应外推为跨验证集的因果结论。")
     fig(d, "fig_q2_elasticity_heatmap.png", "图 5 参数弹性、数据弹性与有效质量边际效用的 1×3 网格")
 
     d.add_heading("7 17 域配比与二阶非加性", 1)

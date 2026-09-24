@@ -46,6 +46,34 @@ def export_q2_bridge_interface(out: Path, data_root: Path, quality: pd.DataFrame
     mapping.to_csv(out / "q2_recipe_quality_mapping.csv", index=False)
     baseline_q0 = float(np.average(mapping.Q_bar, weights=np.ones(len(mapping))))
 
+    # Quantify how much macro quality variation is lost when domains without
+    # document-level measurements are filled with the observed-domain median.
+    observed_values = [observed[d] for d in observed]
+    median_value = float(np.median(observed_values)) if observed_values else 0.5
+    q_observed_only = np.array([observed.get(d, np.nan) for d in domain_order], dtype=float)
+    q_imputed = np.where(np.isfinite(q_observed_only), q_observed_only, median_value)
+    # For this diagnostic, unknown domains are removed and the remaining
+    # composition is reclosed, producing the quality functional supported by
+    # actual document evidence only.
+    known_mask = np.isfinite(q_observed_only)
+    known_prop = proportions[:, known_mask]
+    known_prop = known_prop / np.where(known_prop.sum(axis=1, keepdims=True) == 0,
+                                       1.0, known_prop.sum(axis=1, keepdims=True))
+    q_bar_observed = known_prop @ q_observed_only[known_mask]
+    q_bar_imputed = proportions @ q_imputed
+    var_full = float(np.var(q_bar_imputed, ddof=1))
+    var_observed = float(np.var(q_bar_observed, ddof=1))
+    pd.DataFrame([{
+        "n_domains": len(domain_order),
+        "n_observed_domains": int(known_mask.sum()),
+        "n_median_imputed_domains": int((~known_mask).sum()),
+        "median_imputation_value": median_value,
+        "Qbar_variance_with_imputation": var_full,
+        "Qbar_variance_observed_only_reclosed": var_observed,
+        "variance_loss_fraction_vs_observed_only": float(1.0 - var_full / var_observed) if var_observed > 0 else np.nan,
+        "interpretation": "Q_bar is weak evidence because most domains lack document-level quality observations"
+    }]).to_csv(out / "qbar_imputation_variance_loss.csv", index=False)
+
     coeff = loss_coefficients.copy()
     t_summary = coeff.groupby("mixture_domain").t_relative_substitution.mean().reindex(domain_order).fillna(0.0)
     t_vec = (t_summary - t_summary.mean()).to_numpy(float)
@@ -89,6 +117,7 @@ def export_q2_bridge_interface(out: Path, data_root: Path, quality: pd.DataFrame
         "Q_star_17": q_star,
         "Q_star_status": q_status,
         "Q0_train_recipe_mean": baseline_q0,
+        "Qbar_imputation_diagnostic": "qbar_imputation_variance_loss.csv",
         "first_order_substitution_vector_t": {d: float(v) for d, v in zip(domain_order, t_vec)},
         "second_order_top5_pairs_by_loss_domain": top_pairs,
         "second_order_effect_definition": "joint transfer change minus sum of two single transfers, evaluated per Loss domain on independent test recipes",

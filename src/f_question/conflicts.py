@@ -11,6 +11,38 @@ GROUPS = ["edu", "read", "reason", "clean", "struct"]
 THRESHOLDS = [(0.70, 0.30), (0.75, 0.25), (0.80, 0.20), (0.90, 0.10)]
 
 
+def domain_equal_conflict_rate(frame: pd.DataFrame, upper: float = 0.75,
+                               lower: float = 0.25) -> float:
+    """Return the macro conflict rate with every source domain weighted equally."""
+    rates = []
+    for _, group in frame.groupby("domain", dropna=False):
+        flags, _ = conflict_details(group, upper, lower)
+        rates.append(float(flags.mean()))
+    return float(np.mean(rates)) if rates else np.nan
+
+
+def permutation_conflict_null(frame: pd.DataFrame, n_perm: int = 1000,
+                              upper: float = 0.75, lower: float = 0.25,
+                              seed: int = 20260924) -> pd.DataFrame:
+    """Build a domain-preserving null by independently permuting group columns.
+
+    Each domain keeps its sample size and each group's empirical distribution;
+    only cross-group alignment is destroyed.  This is the null needed to test
+    whether observed conflict is more common than independent group ranks.
+    """
+    rng = np.random.default_rng(seed)
+    values = np.empty(n_perm, dtype=float)
+    for b in range(n_perm):
+        permuted = frame.copy()
+        for _, group in frame.groupby("domain", dropna=False):
+            idx = group.index.to_numpy()
+            for col in GROUPS:
+                permuted.loc[idx, col] = rng.permutation(group[col].to_numpy())
+        values[b] = domain_equal_conflict_rate(permuted, upper, lower)
+    return pd.DataFrame({"permutation": np.arange(1, n_perm + 1),
+                         "macro_conflict_rate": values})
+
+
 def conflict_details(frame: pd.DataFrame, upper: float = 0.75, lower: float = 0.25):
     """Return row flags and unordered high-low group-pair counts within one domain."""
     ranks = frame[GROUPS].rank(pct=True, axis=0, method="average")

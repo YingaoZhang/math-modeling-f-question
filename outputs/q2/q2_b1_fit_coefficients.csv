@@ -1,6 +1,7 @@
-parameter,value
-c,1.6897673026940838
-A,0.35401354320323924
-B,1.2402874526442564
-alpha,0.3399571338902425
-beta,0.27987590629329184
+parameter,value,fit_stage
+A,2.082391174331089,stage2_beta_relaxed
+B,1.2551649038674146,stage2_beta_relaxed
+alpha,0.06613379367800964,stage2_beta_relaxed
+beta,0.27624940798071945,stage2_beta_relaxed
+beta_prior_B1,0.279878,stage1_fixed_and_stage2_penalty
+beta_penalty_lambda,10.0,stage2_penalty

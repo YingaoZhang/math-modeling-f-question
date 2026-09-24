@@ -108,8 +108,9 @@ def mrtS_table(classic: ClassicFit, quality_params: np.ndarray,
                q_quality: float = 0.65, q_step: float = 0.1) -> pd.DataFrame:
     """Compute the quality/parameter MRTS on a complete N,D grid.
 
-    ``q_quality`` increases when defect rate falls.  The reported ``delta_ln_N``
-    is therefore negative for a quality improvement under the stated sign convention.
+    ``q_quality`` increases when defect rate falls.  The reported multiplier is
+    therefore below one for a quality improvement; this is the paper-facing
+    positive statement of the same MRTS calculation.
     """
     if n_values is None: n_values = np.array([0.070542, .162405, .409009, 1.040867, 1.416184, 2.782831, 6.86104, 11.965825])
     if d_values is None: d_values = np.linspace(5, 300, 147)
@@ -119,7 +120,7 @@ def mrtS_table(classic: ClassicFit, quality_params: np.ndarray,
         for d in d_values:
             frame = pd.DataFrame({"N_params_B": [n], "D_tokens_B": [d], "Q_score": [1-q_quality]})
             L = float(asymmetric_quality_prediction(frame, p)[0])
-            c, A, B, gamma, alpha, beta, theta = p
+            A, B, gamma, alpha, beta, theta = p
             defect = 1-q_quality
             dLdqdef = gamma*theta*max(defect, 1e-8)**(theta-1)
             dLdqquality = -dLdqdef
@@ -129,13 +130,18 @@ def mrtS_table(classic: ClassicFit, quality_params: np.ndarray,
                          "loss": L, "dL_dQ_quality": dLdqquality, "dL_dlnN": dLdlnN,
                          "elasticity_N": dLdlnN/L, "delta_Q_quality": q_step,
                          "delta_ln_N": delta_ln_n, "delta_N_percent": (np.exp(delta_ln_n)-1)*100,
+                         "parameter_multiplier_for_quality_plus_0_1": np.exp(delta_ln_n),
+                         "parameter_reduction_percent": (1-np.exp(delta_ln_n))*100,
+                         "parameter_increase_multiplier_for_same_gain": np.exp(-delta_ln_n),
                          "N_equiv_B": n*np.exp(delta_ln_n)})
     return pd.DataFrame(rows)
 
 
 def summarize_mrts(table: pd.DataFrame) -> pd.DataFrame:
     """Return min, quartiles, median and max for MRTS quantities."""
-    cols = ["dL_dQ_quality", "dL_dlnN", "elasticity_N", "delta_ln_N", "delta_N_percent", "N_equiv_B"]
+    cols = ["dL_dQ_quality", "dL_dlnN", "elasticity_N", "delta_ln_N", "delta_N_percent",
+            "parameter_multiplier_for_quality_plus_0_1", "parameter_reduction_percent",
+            "parameter_increase_multiplier_for_same_gain", "N_equiv_B"]
     rows = []
     for c in cols:
         s = table[c].dropna()

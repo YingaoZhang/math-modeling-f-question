@@ -1,0 +1,4 @@
+dataset,threshold,observed_macro_conflict_rate,n_domains,n_records,interpretation
+A1,P90/P10,0.09089644088201608,7,51230,extreme-tail conflict sensitivity
+A2,P90/P10,0.13759059521771386,1,17523,extreme-tail conflict sensitivity
+A3,P90/P10,0.11342219953669166,1,203752,extreme-tail conflict sensitivity

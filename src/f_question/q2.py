@@ -61,12 +61,16 @@ def run() -> dict:
     cv = cross_validate_classic(b1)
     diag.to_csv(OUT / "q2_b1_predictions.csv", index=False)
     cv.to_csv(OUT / "q2_b1_cv_metrics.csv", index=False)
-    pd.DataFrame([{"parameter": k, "value": v} for k, v in zip(["c", "A", "B", "alpha", "beta"], model.params)]).to_csv(OUT / "q2_b1_fit_coefficients.csv", index=False)
+    coef_rows = [{"parameter": k, "value": v, "fit_stage": "stage2_beta_relaxed"}
+                 for k, v in zip(["A", "B", "alpha", "beta"], model.params)]
+    coef_rows += [{"parameter": "beta_prior_B1", "value": model.beta_prior, "fit_stage": "stage1_fixed_and_stage2_penalty"},
+                  {"parameter": "beta_penalty_lambda", "value": model.beta_penalty, "fit_stage": "stage2_penalty"}]
+    pd.DataFrame(coef_rows).to_csv(OUT / "q2_b1_fit_coefficients.csv", index=False)
     grid, leave_n, pair_hold = b1_grid_diagnostics(b1, model)
     grid.to_csv(OUT / "q2_b1_grid_structure.csv", index=False)
     leave_n.to_csv(OUT / "q2_b1_leave_one_n.csv", index=False)
     pair_hold.to_csv(OUT / "q2_b1_group_holdout_metrics.csv", index=False)
-    print(f"【实证检验通过】B1 解析网格诊断: {int(grid.n_rows.iloc[0])} 行, {int(grid.n_N.iloc[0])}x{int(grid.n_D.iloc[0])}, group-mean R2={grid.group_mean_r2.iloc[0]:.6f}")
+    print(f"【实证检验通过】B1 解析网格诊断: {int(grid.n_rows.iloc[0])} 行, {int(grid.n_N.iloc[0])}x{int(grid.n_D.iloc[0])}; 无截距两阶段拟合完成")
     plt.figure(figsize=(6.2, 5)); plt.scatter(diag.val_loss, diag.predicted_loss, s=10, alpha=.35)
     lo, hi = float(diag.val_loss.min()), float(diag.val_loss.max()); plt.plot([lo, hi], [lo, hi], "k--")
     plt.xlabel("Observed B1 val_loss"); plt.ylabel("Predicted classic scaling loss"); plt.title("B1 observed versus predicted")
@@ -127,7 +131,7 @@ def run() -> dict:
     q_sensitivity.to_csv(OUT / "q2_quality_effect_coefficients.csv", index=False)
     q_pred.to_csv(OUT / "q2_quality_predictions.csv", index=False)
     from scipy.stats import pearsonr
-    base_pred = model.params[0] + model.params[1]*q_all.N_params_B.to_numpy(float)**(-model.params[3]) + model.params[2]*q_all.D_tokens_B.to_numpy(float)**(-model.params[4])
+    base_pred = model.params[0]*q_all.N_params_B.to_numpy(float)**(-model.params[2]) + model.params[1]*q_all.D_tokens_B.to_numpy(float)**(-model.params[3])
     lv = linear_coef.set_index("coefficient")["value"]
     old_derivative = (lv["Q_centered"] + lv["QxN_term"] * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
                       + lv["QxD_term"] * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1]))
@@ -156,14 +160,14 @@ def run() -> dict:
     print("【边界声明】B9/B10 为超百亿规模外推情景工具，不作为独立实验验证")
     plt.figure(figsize=(7, 4)); plt.scatter(large.N_params_B, large.val_loss, s=12, alpha=.45, label="estimated observed"); plt.scatter(large.N_params_B, large.predicted_loss, s=12, alpha=.45, label="classic prediction"); plt.xscale("log"); plt.xlabel("N parameters (B)"); plt.ylabel("loss"); plt.title("Large-scale scenario extrapolation"); plt.legend(); _savefig(OUT / "fig_q2_large_scale_extrapolation.png")
 
-    qp = q_sensitivity[q_sensitivity["lambda"] == 1].iloc[0][["c", "A", "B", "gamma", "alpha", "beta", "theta"]].to_numpy(float)
+    qp = q_sensitivity[q_sensitivity["lambda"] == 1].iloc[0][["A", "B", "gamma", "alpha", "beta", "theta"]].to_numpy(float)
     mrt = mrtS_table(model, qp, q_quality=.65, q_step=.1); mrt.to_csv(OUT / "q2_mrts_equivalence_table.csv", index=False)
     summarize_mrts(mrt).to_csv(OUT / "q2_mrts_summary.csv", index=False)
     mrt.to_csv(OUT / "q2_elasticities.csv", index=False)
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     grids = [("elasticity_N", "Parameter elasticity"), ("elasticity_D", "Data elasticity"), ("marginal_quality", "Quality marginal utility")]
     # Add data elasticity and positive quality utility fields for the plot/table.
-    c,A,B,gamma,alpha,beta,theta=qp
+    A,B,gamma,alpha,beta,theta=qp
     mrt["elasticity_D"] = (-beta*B*mrt.D_tokens_B.to_numpy(float)**(-beta))/mrt.loss.to_numpy(float)
     mrt["marginal_quality"] = -mrt.dL_dQ_quality
     mrt.to_csv(OUT / "q2_elasticities.csv", index=False)
