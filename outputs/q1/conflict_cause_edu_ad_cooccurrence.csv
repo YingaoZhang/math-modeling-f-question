@@ -1,0 +1,12 @@
+dataset,domain,n,edu_high_ad_high_n,edu_high_ad_high_rate,interpretation
+A1,arxiv,1419,67,0.047216349541930935,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,book,171,17,0.09941520467836257,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,c4,10000,794,0.0794,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,commoncrawl,9640,692,0.07178423236514522,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,github,10000,624,0.0624,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,stackexchange,10000,870,0.087,high education signal co-occurs with high raw ad probability; directional trade-off example
+A1,wikipedia,10000,912,0.0912,high education signal co-occurs with high raw ad probability; directional trade-off example
+A2_full,arxiv,17523,888,0.05067625406608457,high education signal co-occurs with high raw ad probability; directional trade-off example
+A2_nonoverlap,arxiv,16104,822,0.05104321907600596,high education signal co-occurs with high raw ad probability; directional trade-off example
+A3_full,github,203752,12609,0.061884055125839256,high education signal co-occurs with high raw ad probability; directional trade-off example
+A3_nonoverlap,github,193752,11994,0.06190387712126843,high education signal co-occurs with high raw ad probability; directional trade-off example

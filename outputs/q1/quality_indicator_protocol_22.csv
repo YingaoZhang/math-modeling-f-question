@@ -1,0 +1,23 @@
+indicator,meaning,direction,preprocessing,group,use_in_Q
+fineweb_edu,教育价值,正向,长度1列表直接取值；A1参考经验CDF,edu,主模型
+modernbert_readability,可读性,正向,6类logits softmax后取0-5期望；参考CDF,read,主模型
+fluency_en,流畅性,正向,2类logits softmax取正类概率；参考CDF,read,主模型
+modernbert_reasoning,推理性,正向,6类logits softmax后取0-5期望；参考CDF,reason,主模型
+modernbert_professionalism,专业性,正向,6类logits softmax后取0-5期望；参考CDF,reason,主模型
+modernbert_cleanliness,文本清洁度,正向,6类logits softmax后取0-5期望；参考CDF,clean,主模型
+ad_en,广告概率,负向,2类logits softmax取正类概率后反向；参考CDF,clean,主模型
+rps_lines_ending_with_terminal_punctution_mark,行末标点比例,正向,参考CDF；高值视为完整性代理,struct,主模型
+rps_doc_frac_no_alph_words,无字母词比例,负向,反向后参考CDF,struct,主模型
+rps_doc_frac_chars_top_2gram,字符二元组重复比例,负向,反向后参考CDF；越界值保留并标记,struct,主模型
+rps_doc_frac_chars_top_3gram,字符三元组重复比例,负向,反向后参考CDF；越界值保留并标记,struct,主模型
+rps_lines_uppercase_letter_fraction,大写字母比例,负向,反向后参考CDF,struct,主模型
+rps_doc_frac_unique_words,唯一词比例,正向,参考CDF,struct,主模型
+rps_lines_numerical_chars_fraction,数字字符比例,负向,反向后参考CDF,struct,主模型
+rps_doc_unigram_entropy,词元熵,正向,参考CDF,struct,主模型
+rps_doc_num_sentences,句子数,不直接赋方向,长度/结构诊断；受文档长度影响,长度诊断,不并入Q
+rps_doc_word_count,词数,不直接赋方向,作为文档长度权重及诊断,长度诊断,不并入Q
+rps_doc_mean_word_length,平均词长,不直接赋方向,语言和领域依赖；单列描述不并入Q,风格诊断,不并入Q
+dsir_books,Books重要性分,依任务而定,重尾原始打分；当前缺少跨域真值，不纳入主Q,重要性诊断,不并入Q
+dsir_math,Math重要性分,依任务而定,重尾原始打分；当前缺少跨域真值，不纳入主Q,重要性诊断,不并入Q
+dsir_wiki,Wiki重要性分,依任务而定,重尾原始打分；当前缺少跨域真值，不纳入主Q,重要性诊断,不并入Q
+qurater,Qurater多维信号,待字段定义,4维语义未在附件字段表充分确认，保留原始信号供扩展,待验证诊断,不并入Q

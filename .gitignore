@@ -1,0 +1,18 @@
+.idea/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Local data that exceeds GitHub's 100 MB per-file limit.
+# See data/README.md for the complete attachment manifest and reproduction notes.
+data/raw/real_attachments/A_data_value/regmix_domain_sample.jsonl.xz
+data/raw/real_attachments/A_data_value/slimpajama_quality_signal_sample.jsonl.xz
+
+# Generated/local render artifacts
+*.tmp
+*.bak
+~$*

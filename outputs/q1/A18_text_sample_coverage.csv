@@ -1,0 +1,18 @@
+domain,sample_rows,mean_text_chars,quality_indicators_present,permitted_use
+arxiv,1719,47031.444444444445,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+dm_mathematics,1922,8194.0,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+enron_emails,1010,1618.6326732673267,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+europarl,157,51662.86624203822,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+freelaw,5100,15762.001960784313,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+github,15117,5178.677647681418,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+gutenberg_pg_19,79,381179.59493670886,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+hackernews,944,5180.604872881356,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+nih_exporter,1884,2081.3524416135883,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+philpapers,67,73524.07462686567,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+pile_cc,18191,4523.030344675939,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+pubmed_abstracts,29895,1330.4512460277638,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+pubmed_central,2629,31267.949030049447,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+stackexchange,30378,2171.39604318915,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+ubuntu_irc,16,225242.75,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+uspto_backgrounds,11415,4139.515549715287,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts
+wikipedia_en,17511,2964.616298326766,False,domain coverage and qualitative text examples only; cannot calculate Q/conflicts

@@ -1,0 +1,27 @@
+domain,scale,n_shared_recipes,spearman_1m_vs_estimated,kendall_tau,pairwise_rank_reversal_fraction,best_recipe_1m,best_recipe_estimated,best_recipe_same,worst_recipe_1m,worst_recipe_estimated,data_status
+arxiv,10b,63,0.8665034562211982,0.697900665642601,0.1510496671786995,45,45,True,47,47,estimated; shared recipe ids; not independent experiment
+dm_mathematics,10b,63,0.829205069124424,0.647721454173067,0.17613927291346648,35,35,True,32,23,estimated; shared recipe ids; not independent experiment
+freelaw,10b,63,0.7527361751152074,0.5791090629800306,0.2104454685099847,11,32,False,9,36,estimated; shared recipe ids; not independent experiment
+github,10b,63,0.8076516897081414,0.6159754224270353,0.19201228878648235,41,51,False,29,7,estimated; shared recipe ids; not independent experiment
+gutenberg_pg_19,10b,63,0.4222350230414747,0.293394777265745,0.3533026113671275,31,29,False,9,62,estimated; shared recipe ids; not independent experiment
+hackernews,10b,63,0.019105222734254995,0.009728622631848437,0.49513568868407576,61,47,False,9,16,estimated; shared recipe ids; not independent experiment
+pile_cc,10b,63,0.09586213517665132,0.07526881720430106,0.4623655913978495,57,32,False,9,16,estimated; shared recipe ids; not independent experiment
+pubmed_abstracts,10b,63,0.41018625192012287,0.2882744495647721,0.35586277521761395,63,9,False,33,17,estimated; shared recipe ids; not independent experiment
+pubmed_central,10b,63,0.7608486943164363,0.5627240143369174,0.21863799283154128,9,9,True,32,17,estimated; shared recipe ids; not independent experiment
+stackexchange,10b,63,0.6384725239577943,0.44558260103785674,0.27720869948107163,25,51,False,29,27,estimated; shared recipe ids; not independent experiment
+ubuntu_irc,10b,63,0.6226958525345623,0.434715821812596,0.28264208909370203,23,47,False,9,37,estimated; shared recipe ids; not independent experiment
+uspto_backgrounds,10b,63,0.45118629019054235,0.32368759063899477,0.3381562046805026,29,29,True,34,36,estimated; shared recipe ids; not independent experiment
+wikipedia_en,10b,63,0.3286129180314356,0.2371926540759831,0.38140367296200844,10,47,False,34,36,estimated; shared recipe ids; not independent experiment
+arxiv,70b,63,0.8086117511520738,0.6364567332309267,0.18177163338453667,45,45,True,47,47,estimated; shared recipe ids; not independent experiment
+dm_mathematics,70b,63,0.810339861751152,0.6118791602662569,0.19406041986687156,35,35,True,32,23,estimated; shared recipe ids; not independent experiment
+freelaw,70b,63,0.6798195084485408,0.513568868407578,0.243215565796211,11,32,False,9,36,estimated; shared recipe ids; not independent experiment
+github,70b,63,0.7099174347158218,0.5227854582693291,0.23860727086533545,41,51,False,29,7,estimated; shared recipe ids; not independent experiment
+gutenberg_pg_19,70b,63,0.33150921658986177,0.2299027137736815,0.38504864311315923,31,29,False,9,62,estimated; shared recipe ids; not independent experiment
+hackernews,70b,63,-0.08995775729646698,-0.0629800307219662,0.5314900153609831,61,47,False,9,16,estimated; shared recipe ids; not independent experiment
+pile_cc,70b,63,0.03797043010752688,0.03430619559651817,0.4828469022017409,57,32,False,9,16,estimated; shared recipe ids; not independent experiment
+pubmed_abstracts,70b,63,0.28768241167434716,0.20839733742959546,0.3958013312852023,63,9,False,33,16,estimated; shared recipe ids; not independent experiment
+pubmed_central,70b,63,0.6473694316436251,0.463389656938044,0.268305171530978,9,9,True,32,17,estimated; shared recipe ids; not independent experiment
+stackexchange,70b,63,0.49208539852572086,0.31856595154660566,0.34071702422669714,25,51,False,29,27,estimated; shared recipe ids; not independent experiment
+ubuntu_irc,70b,63,0.49808585456081145,0.3441741470085514,0.3279129264957243,23,47,False,9,37,estimated; shared recipe ids; not independent experiment
+uspto_backgrounds,70b,63,0.37796126069980396,0.2720287242210519,0.363985637889474,29,29,True,34,36,estimated; shared recipe ids; not independent experiment
+wikipedia_en,70b,63,0.23747119815668205,0.16845878136200715,0.41577060931899645,10,47,False,34,36,estimated; shared recipe ids; not independent experiment

@@ -1,0 +1,4 @@
+analysis,status,reason
+supervised_meta_rater_weights,not_identifiable_from_available_pairing,A16 maps only 6/17 mixture domains; no document-level A quality score is paired with the mixture Loss experiments. Fitting weights would confound domain effects and quality.
+A_ThePile_to_B_Pythia_val_loss_bridge,not_identifiable_from_available_pairing,The validation corpora differ and no common paired observations are supplied; no affine or monotone bridge is fit.
+A_Q_to_B_Q_score_rescaling,not_identifiable_from_available_pairing,No same-document paired A quality scores and B Q_score observations are supplied.

@@ -1,0 +1,18 @@
+composition_domain,loss_observed,coefficient_semantics
+arxiv,True,relative replacement; effect depends on balance contrast
+freelaw,True,relative replacement; effect depends on balance contrast
+nih_exporter,False,relative replacement; effect depends on balance contrast
+pubmed_central,True,relative replacement; effect depends on balance contrast
+wikipedia_en,True,relative replacement; effect depends on balance contrast
+dm_mathematics,True,relative replacement; effect depends on balance contrast
+github,True,relative replacement; effect depends on balance contrast
+philpapers,False,relative replacement; effect depends on balance contrast
+stackexchange,True,relative replacement; effect depends on balance contrast
+enron_emails,False,relative replacement; effect depends on balance contrast
+gutenberg_pg_19,True,relative replacement; effect depends on balance contrast
+pile_cc,True,relative replacement; effect depends on balance contrast
+ubuntu_irc,True,relative replacement; effect depends on balance contrast
+europarl,False,relative replacement; effect depends on balance contrast
+hackernews,True,relative replacement; effect depends on balance contrast
+pubmed_abstracts,True,relative replacement; effect depends on balance contrast
+uspto_backgrounds,True,relative replacement; effect depends on balance contrast

@@ -1,0 +1,16 @@
+dataset,comparison,n_domains,spearman_rank,max_absolute_rank_shift,domain_order_equal
+A1,critic_vs_equal,7,1.0,0.0,True
+A1,entropy_vs_equal,7,0.9642857142857145,1.0,False
+A1,length_vs_equal,7,0.9642857142857145,1.0,False
+A2_full,critic_vs_equal,1,,0.0,True
+A2_full,entropy_vs_equal,1,,0.0,True
+A2_full,length_vs_equal,1,,0.0,True
+A2_nonoverlap,critic_vs_equal,1,,0.0,True
+A2_nonoverlap,entropy_vs_equal,1,,0.0,True
+A2_nonoverlap,length_vs_equal,1,,0.0,True
+A3_full,critic_vs_equal,1,,0.0,True
+A3_full,entropy_vs_equal,1,,0.0,True
+A3_full,length_vs_equal,1,,0.0,True
+A3_nonoverlap,critic_vs_equal,1,,0.0,True
+A3_nonoverlap,entropy_vs_equal,1,,0.0,True
+A3_nonoverlap,length_vs_equal,1,,0.0,True

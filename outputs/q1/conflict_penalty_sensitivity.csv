@@ -1,0 +1,6 @@
+lambda,Q_mean,Q_min,Q_max,spearman_vs_unpenalized,mean_rank_shift,loss_cv_delta,interpretation
+0.0,0.501738067224265,0.0968067728678288,0.9119967281021598,1.0,0.0,,descriptive Q re-ranking; document Q and mixture Loss have no paired observations
+0.1,0.4663433807512054,0.0918655275037843,0.9070730505694641,0.9961917445325711,964.8492680070271,,descriptive Q re-ranking; document Q and mixture Loss have no paired observations
+0.25,0.4132513510416163,0.07977566775516289,0.8996875342704206,0.9767896561492095,2391.6610579738435,,descriptive Q re-ranking; document Q and mixture Loss have no paired observations
+0.5,0.32478758109033723,1e-09,0.8873783404386814,0.9130338172591048,4661.119851649424,,descriptive Q re-ranking; document Q and mixture Loss have no paired observations
+1.0,0.16835294533322098,1e-09,0.8627599527752029,0.7410498034772569,8121.378918602381,,descriptive Q re-ranking; document Q and mixture Loss have no paired observations

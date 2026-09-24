@@ -1,0 +1,14 @@
+loss_domain,best_alpha,cv_rmse
+metric/the_pile_arxiv_val_loss,10.0,0.5000831392202235
+metric/the_pile_freelaw_val_loss,1.0,0.3078958026918041
+metric/the_pile_pubmed_central_val_loss,1.0,0.39014005552643677
+metric/the_pile_wikipedia_en_val_loss,1.0,0.2562189677376345
+metric/the_pile_dm_mathematics_val_loss,0.1,0.6789194803715287
+metric/the_pile_github_val_loss,1.0,0.5306700740411617
+metric/the_pile_stackexchange_val_loss,1.0,0.4030506751277555
+metric/the_pile_gutenberg_pg_19_val_loss,10.0,0.2531224801149794
+metric/the_pile_pile_cc_val_loss,10.0,0.18554257303929997
+metric/the_pile_ubuntu_irc_val_loss,1.0,0.4729451403964372
+metric/the_pile_hackernews_val_loss,1.0,0.20715717029072578
+metric/the_pile_pubmed_abstracts_val_loss,10.0,0.3610585840418984
+metric/the_pile_uspto_backgrounds_val_loss,1.0,0.24946239002889614

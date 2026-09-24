@@ -1,0 +1,27 @@
+loss_domain,gain_domain,replaced_domain,delta_log_excess_loss_per_unit_share,interpretation,direction
+metric/the_pile_arxiv_val_loss,arxiv,enron_emails,-31.232939655547312,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_dm_mathematics_val_loss,dm_mathematics,pubmed_abstracts,-22.513543397495585,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_freelaw_val_loss,freelaw,github,-28.34910243385999,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_github_val_loss,github,uspto_backgrounds,-22.13535620839308,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_gutenberg_pg_19_val_loss,gutenberg_pg_19,uspto_backgrounds,-22.409583878660587,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_hackernews_val_loss,hackernews,uspto_backgrounds,-21.89744852884355,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_pile_cc_val_loss,pile_cc,uspto_backgrounds,-7.715332618814121,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_pubmed_abstracts_val_loss,pubmed_abstracts,uspto_backgrounds,-18.432269685228935,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_pubmed_central_val_loss,pubmed_central,enron_emails,-25.054596989982407,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_stackexchange_val_loss,stackexchange,gutenberg_pg_19,-22.34391375762538,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_ubuntu_irc_val_loss,ubuntu_irc,pubmed_abstracts,-21.911750536176562,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_uspto_backgrounds_val_loss,nih_exporter,github,-1.7765113751299317,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_wikipedia_en_val_loss,wikipedia_en,github,-21.01739774596911,increase gain_domain share by replacing replaced_domain share; conditional association,lower predicted excess Loss
+metric/the_pile_arxiv_val_loss,enron_emails,europarl,4.868862422072897,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_dm_mathematics_val_loss,freelaw,dm_mathematics,22.537025493668814,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_freelaw_val_loss,arxiv,freelaw,28.284271247419053,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_github_val_loss,pubmed_central,github,22.262666401641688,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_gutenberg_pg_19_val_loss,arxiv,gutenberg_pg_19,22.462958269541694,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_hackernews_val_loss,pubmed_central,hackernews,22.024231770600263,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_pile_cc_val_loss,github,pile_cc,8.077700238139112,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_pubmed_abstracts_val_loss,enron_emails,pubmed_abstracts,20.4570791162231,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_pubmed_central_val_loss,freelaw,pubmed_central,24.78453975609882,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_stackexchange_val_loss,freelaw,stackexchange,22.47752066127631,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_ubuntu_irc_val_loss,pubmed_central,ubuntu_irc,21.9936716252102,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_uspto_backgrounds_val_loss,github,uspto_backgrounds,19.718811786234504,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss
+metric/the_pile_wikipedia_en_val_loss,arxiv,wikipedia_en,20.818155140953582,increase gain_domain share by replacing replaced_domain share; conditional association,higher predicted excess Loss

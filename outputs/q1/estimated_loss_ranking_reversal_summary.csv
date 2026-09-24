@@ -1,0 +1,4 @@
+comparison,n_recipes,spearman,kendall_tau,best_recipe_a,best_recipe_b,data_status
+10B vs 70B; mean within-domain z-score composite,63,0.9942396313364055,0.944700460829493,32,32,"estimated; equal-domain standardized composite is descriptive only, not a response"
+1M vs 10b; mean within-domain z-score composite,63,-0.748991935483871,-0.5678443420378904,56,32,1M observed vs estimated; equal-domain standardized composite is descriptive only
+1M vs 70b; mean within-domain z-score composite,63,-0.7931067588325654,-0.6129032258064515,56,32,1M observed vs estimated; equal-domain standardized composite is descriptive only

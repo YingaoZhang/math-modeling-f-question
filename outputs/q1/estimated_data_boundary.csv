@@ -1,0 +1,2 @@
+rows_10b,rows_70b,common_recipe_ids,loss_domains_each_scale,independent_extrapolations,interpretation
+63,63,63,13,False,A12-A15 are estimated; same 63 recipes; full per-domain rank diagnostics are not independent experiments
