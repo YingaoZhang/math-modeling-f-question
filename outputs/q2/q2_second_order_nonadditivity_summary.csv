@@ -1,0 +1,2 @@
+n_effects,positive_share,min,median,max,effect_source,interpretation
+65,0.5538461538461539,-0.11805725937536694,0.02498892565501593,0.24865643451531927,independent test quadratic model,model-conditional nonadditive increment; not an experimental causal interaction

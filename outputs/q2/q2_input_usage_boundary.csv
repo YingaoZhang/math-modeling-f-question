@@ -1,7 +1,8 @@
 item,source,used_as
-B1 primary fit,real Pythia log,classic N-D scaling
-B2/B3,Cerebras / interpolated trajectories,external validation
-B4/B5,cross-family / published,cross-family validation
-B6-B8,semi-synthetic Q experiments,native Q effect only
-B9/B10,metadata and estimated baseline,large-scale scenario extrapolation
-Q1 interface,A1 ECDF Q and ILR p,cross-question scenario input; no direct Loss merge
+B1,real Pythia log,complete analytical N-D grid; structured diagnostics
+B2,Cerebras,external ranking plus affine recalibration
+B3,interpolated trajectories,same-family validation
+B4/B5,cross-family/literature,ranking validation
+B6-B8,native Q_score experiments,physical asymmetric defect-rate effect
+B9/B10,estimated large-scale tables,scenario sensitivity only
+A interface,Question 1 bridge,"Q_bar(p), ILR substitution and conditional second-order effects"

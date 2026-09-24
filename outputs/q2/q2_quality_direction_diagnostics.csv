@@ -1,0 +1,6 @@
+quantity,pearson_r,n
+raw Q_score vs val_loss,0.6066993844835524,2090
+Q_score vs loss residual after B1 N-D,0.6661095491738475,2090
+dL/dQ_score grid minimum,0.9782292060366233,2090
+dL/dQ_score grid maximum,2.118461430077528,2090
+dL/dQ_score positive share,1.0,2090

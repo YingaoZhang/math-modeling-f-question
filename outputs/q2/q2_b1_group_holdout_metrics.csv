@@ -1,0 +1,2 @@
+holdout_scheme,r2,mae,rmse,n,note
+"group_by_(N,D)",0.9999998160762017,0.00010548014395966903,0.00014669798332997338,1176,reported deterministic grid diagnostic; no random external data
