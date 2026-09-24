@@ -16,3 +16,5 @@ data/raw/real_attachments/A_data_value/slimpajama_quality_signal_sample.jsonl.xz
 *.tmp
 *.bak
 ~$*
+outputs/q2/docx_render/
+outputs/q2/pdf_render*/
