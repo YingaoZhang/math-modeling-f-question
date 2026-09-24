@@ -47,3 +47,14 @@ outputs/q1/                  CSV 表格、论文报告和插图
 - `indicators.py`：22 项质量指标的方向、变换和纳入 Q 规范。
 - `reporting.py`：论文补充表格、替代对比和解释。
 - `q1.py`：命令行入口及主流程编排；原始附件不在计算中覆盖。
+
+## 第二问结果摘要
+
+第二问使用 B1 Pythia 日志拟合 `L=c+A N^{-alpha}+B D^{-beta}`，B2/B3 做模型族外与轨迹验证，B4/B5 做跨族和文献验证，B6--B8 单独识别原生 `Q_score` 效应，B9/B10 仅作百亿参数以上情景外推。第一问的 `Q_star` 和 ILR 配比通过 `outputs/q1/q2_input_interface_bundle.json` 接入，不与 The Pile Loss 直接拼接。
+
+```powershell
+$env:PYTHONPATH='src'
+.venv\Scripts\python.exe -m f_question.q2
+```
+
+第二问唯一完整文档为 `outputs/q2/第二问_完整报告.docx`；同目录保存可复现的结果表和插图。

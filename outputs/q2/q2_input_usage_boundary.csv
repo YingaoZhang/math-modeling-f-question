@@ -1,0 +1,7 @@
+item,source,used_as
+B1 primary fit,real Pythia log,classic N-D scaling
+B2/B3,Cerebras / interpolated trajectories,external validation
+B4/B5,cross-family / published,cross-family validation
+B6-B8,semi-synthetic Q experiments,native Q effect only
+B9/B10,metadata and estimated baseline,large-scale scenario extrapolation
+Q1 interface,A1 ECDF Q and ILR p,cross-question scenario input; no direct Loss merge
