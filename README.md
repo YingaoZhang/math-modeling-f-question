@@ -14,13 +14,13 @@ python -m f_question.q3
 python -m f_question.q4
 ```
 
-从已有结果重建论文：
+从已有结果重建完整论文：
 
 ```powershell
-python build_unified_docx.py
+python tools/build_complete_paper.py
 ```
 
-命令行可通过 `--data` 指定附件目录。四问统一结果、方法、图表和附录见 [`outputs/数学建模F题完整论文.docx`](outputs/数学建模F题完整论文.docx)；第一、二问的独立构建结果见 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)，第三问见 [`outputs/q3/第三问完整论文.docx`](outputs/q3/第三问完整论文.docx)，第四问见 [`outputs/q4/第四问完整论文.docx`](outputs/q4/第四问完整论文.docx)。Q4 会审计 C8 JSON：4 个无法解析的文件标记为损坏并排除，其余可解析 JSON 也按预先设定的数据边界排除，建模只读 CSV 汇总表。
+命令行可通过 `--data` 指定附件目录。四问统一结果、方法、图表和附录仅交付 [`outputs/数学建模F题完整论文.docx`](outputs/数学建模F题完整论文.docx)。Q4 会审计 C8 JSON：4 个无法解析的文件标记为损坏并排除，其余可解析 JSON 也按预先设定的数据边界排除，建模只读 CSV 汇总表。
 
 ## 项目结构
 
@@ -30,10 +30,7 @@ data/raw/real_attachments/  可公开提交的原始附件子集；超大附件�
 src/f_question/             可复现分析代码
 outputs/q1/                  第一问 CSV 表格和插图
 outputs/q2/                  第二问 CSV 表格和插图
-outputs/数学建模F题完整论文.docx  问题一至问题四统一论文
-outputs/数学建模F题统一论文.docx  第一、二问独立合并论文
-outputs/q3/第三问完整论文.docx    第三问完整论文
-outputs/q4/第四问完整论文.docx    第四问完整论文
+outputs/数学建模F题完整论文.docx  问题一至问题四统一论文（最终交付）
 ```
 
 ## 第一问结果摘要
@@ -45,7 +42,7 @@ outputs/q4/第四问完整论文.docx    第四问完整论文
 
 全部计算指标、敏感性表、数据边界和插图均见 `outputs/q1/`。
 
-第一、二问完整流程、模型形式、验证结果和图表集中在 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)；第三、四问分别使用各自的完整 Word 论文，避免在不同版本之间混用口径。
+第一至第四问的完整流程、模型形式、验证结果、图表和数据边界说明集中在唯一交付文件 `outputs/数学建模F题完整论文.docx`。Q3/Q4 的 Markdown 文件仅作为可复现论文构建源文件保留。
 
 ## 分析模块
 
@@ -65,5 +62,5 @@ $env:PYTHONPATH='src'
 .venv\Scripts\python.exe -m f_question.q2
 ```
 
-第二问结果表和插图保存在 `outputs/q2/`，与第一问一并收录在统一论文；第三、四问分别由 `src/f_question/q3.py`、`src/f_question/q4.py` 运行，并可用 `tools/build_q4_docx.py` 从结果 Markdown 重建第四问 Word。
+第二问结果表和插图保存在 `outputs/q2/`，并收录在完整论文；第三、四问分别由 `src/f_question/q3.py`、`src/f_question/q4.py` 运行。运行完四问后，使用 `tools/build_complete_paper.py` 重建唯一的完整 Word 论文。
 

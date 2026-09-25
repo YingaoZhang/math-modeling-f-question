@@ -30,6 +30,32 @@ def _table(df: pd.DataFrame, cols: list[str] | None = None, n: int | None = None
     return "\n".join(out)
 
 
+def _frontier_boundary_summary(frontier: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Summarize how much of the high-budget curve is fixed by Q3 bounds."""
+    d = frontier.copy()
+    d["budget_flops"] = pd.to_numeric(d["budget_flops"], errors="coerce")
+    d["loss"] = pd.to_numeric(d["loss"], errors="coerce")
+    d["N_params_B"] = pd.to_numeric(d["N_params_B"], errors="coerce")
+    d["D_tokens_B"] = pd.to_numeric(d["D_tokens_B"], errors="coerce")
+    # The frontier optimizer emits tiny floating-point overshoots/undershoots
+    # at the declared box limits; classify values within roundoff as touching
+    # the bound so the boundary audit reflects the model constraint.
+    n_bound = d.N_params_B.ge(5000 * (1.0 - 1e-10))
+    d_bound = d.D_tokens_B.ge(4000 * (1.0 - 1e-10))
+    segment = d[n_bound].sort_values("budget_flops")
+    summary = {
+        "n_total": int(len(d)),
+        "n_n_bound": int(n_bound.sum()),
+        "share_n_bound": float(n_bound.mean()),
+        "n_d_bound": int(d_bound.sum()),
+        "n_bound_budget_min": float(segment.budget_flops.min()) if len(segment) else np.nan,
+        "n_bound_budget_max": float(segment.budget_flops.max()) if len(segment) else np.nan,
+        "n_bound_loss_first": float(segment.loss.iloc[0]) if len(segment) else np.nan,
+        "n_bound_loss_last": float(segment.loss.iloc[-1]) if len(segment) else np.nan,
+    }
+    return pd.DataFrame([summary]), summary
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[2]
     out = root / "outputs" / "q4"
@@ -54,6 +80,15 @@ def main() -> None:
     residuals.to_csv(out / "q4_bridge_fit.csv", index=False, encoding="utf-8-sig")
     bridge_boot.to_csv(out / "q4_bridge_bootstrap.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame([bridge_summary]).to_csv(out / "q4_bridge_summary.csv", index=False, encoding="utf-8-sig")
+    bridge_profile = data["bridge"].copy()
+    bridge_profile["comparability_group"] = np.where(
+        bridge_profile["Loss_Comparability"].astype(str).str.startswith("High"), "High",
+        np.where(bridge_profile["Loss_Comparability"].astype(str).str.startswith("Medium"), "Medium", "Other")
+    )
+    bridge_profile_summary = (bridge_profile.groupby("comparability_group", as_index=False)
+        .agg(n=("LB_Average", "count"), mean_lb_average=("LB_Average", "mean"),
+             min_lb_average=("LB_Average", "min"), max_lb_average=("LB_Average", "max")))
+    bridge_profile_summary.to_csv(out / "q4_bridge_comparability_profile.csv", index=False, encoding="utf-8-sig")
     decomp, decomp_summary, decomp_boot = decompose_scale_vs_time(leaderboard)
     decomp.to_csv(out / "q4_scale_vs_nonscale_decomposition.csv", index=False, encoding="utf-8-sig")
     decomp_boot.to_csv(out / "q4_decomposition_bootstrap.csv", index=False, encoding="utf-8-sig")
@@ -83,6 +118,8 @@ def main() -> None:
         loss_bias_ci=tuple(bias_ci) if len(bias_ci) == 2 else None,
     )
     forecast.to_csv(out / "q4_frontier_predictions.csv", index=False, encoding="utf-8-sig")
+    boundary_table, boundary = _frontier_boundary_summary(data["frontier"])
+    boundary_table.to_csv(out / "q4_frontier_boundary_summary.csv", index=False, encoding="utf-8-sig")
     bridge_plot(residuals, out); decomposition_plot(decomp, out); forecast_plot(forecast, out); coverage_plot(epoch, out)
     task_heterogeneity_plot(task_heterogeneity, out); envelope_plot(annual_envelope, envelope_forecast, out)
     malformed = data["json_manifest"].query("status == 'malformed_excluded'")
@@ -109,6 +146,7 @@ def main() -> None:
         "horizon_months": "预测月数", "annual_compute_growth": "年算力倍数",
         "compute_flops": "算力FLOP", "loss_star": "Loss*", "benchmark_predicted": "榜单预测",
         "bridge_bootstrap_95ci_low": "桥接Bootstrap下限", "bridge_bootstrap_95ci_high": "桥接Bootstrap上限",
+        "q3_endpoint": "Q3取值方式", "q3_endpoint_multiplier": "Q3算力超界倍数",
     })
     bridge_sign = "+" if bridge_summary["slope"] >= 0 else "−"
     large_metrics = pd.read_csv(root / "outputs" / "q2" / "q2_large_scale_metrics.csv")
@@ -134,7 +172,20 @@ def main() -> None:
     ])
     c3_recent = annual_envelope[annual_envelope.n.ge(10)]
     c3_recent_text = _table(c3_recent, ["Year", "n", "mean", "p90", "maximum"])
-    envelope_text = _table(envelope_forecast, ["metric", "forecast_year", "estimate", "prediction_low_95", "prediction_high_95", "n_annual_points"])
+    envelope_text = _table(envelope_forecast, ["metric", "forecast_year", "estimate", "raw_prediction_low_95", "raw_prediction_high_95", "interval_status", "t_dof", "n_annual_points"])
+    bridge_profile_table = bridge_profile_summary.copy()
+    for col in ["mean_lb_average", "min_lb_average", "max_lb_average"]:
+        bridge_profile_table[col] = bridge_profile_table[col].round(4)
+    forecast_cols = ["预测月数", "年算力倍数", "算力FLOP", "Loss*", "榜单预测", "Q3取值方式", "Q3算力超界倍数", "支持域外"]
+    forecast_q3_outside = int(forecast.outside_q3_support.sum())
+    forecast_support_text = "、".join(f"{int(r.horizon_months)}个月×{r.annual_compute_growth:g}倍" for r in forecast.itertuples() if r.outside_q3_support)
+    forecast_endpoint_count = int((forecast.q3_endpoint != "interpolated").sum())
+    forecast_endpoint_text = "、".join(
+        f"{int(r.horizon_months)}个月×{r.annual_compute_growth:g}倍"
+        for r in forecast.itertuples() if r.q3_endpoint != "interpolated"
+    )
+    envelope_not_identifiable = int((envelope_forecast.interval_status == "not_identifiable_df1").sum()) if not envelope_forecast.empty else 0
+    bound_loss_drop = boundary["n_bound_loss_first"] - boundary["n_bound_loss_last"]
     open_summary = f"Yes={int(c4_open.get('Yes', 0)):,}，No={int(c4_open.get('No', 0)):,}，缺失={int(data['epoch']['Open model weights?'].isna().sum()):,}。Frontier model=True 共 {len(c4_frontier)} 条。"
     report = f"""# 问题四 模型效率前沿与规模技术进步分解
 
@@ -196,15 +247,15 @@ C8 与 C4 的模型标识无法广泛直接配对，因此任务回归规模控�
 
 ## 5 未来前沿情景
 
-以 C4 最大观测计算作为起点，设置年化算力增长 1.25、2、4 倍，预测 12 和 24 个月。每个情景先在 Q3 `Loss*(C)` 曲线上取值，再经 C6 High 仿射桥接转换为 benchmark。另以 C3 年度 Average 的 p90（当年较强主流水平）与最大值（观测上沿）构造经验包络，在每年至少 10 条记录的年份上拟合时间趋势，给出 12/24 个月 t 预测区间。两个结果来自不同统计口径，不能直接相减或拼接。
+以 C4 最大观测计算作为起点，设置年化算力增长 1.25、2、4 倍，预测 12 和 24 个月。每个情景先在 Q3 `Loss*(C)` 曲线上取值，再经 C6 High 仿射桥接转换为 benchmark。另以 C3 年度 Average 的 p90（当年较强主流水平）与最大值（观测上沿）构造经验包络，在每年至少 10 条记录的年份上拟合时间趋势，给出 12/24 个月的观测包络。两条轨道保留各自的统计口径，报告中并列展示，不做数值相减、加权或拼接。基座轨来自 C6 的 High 可比组，工程轨来自 C6 的 Medium 可比组和 C3 观测上沿，二者均是可复核的参照层。
 
-{_table(forecast_display, ['预测月数','年算力倍数','算力FLOP','Loss*','榜单预测','桥接Bootstrap下限','桥接Bootstrap上限','支持域外'])}
+{_table(forecast_display, forecast_cols + ['桥接Bootstrap下限','桥接Bootstrap上限','支持域外'])}
 
 表中 Bootstrap 区间只反映 7 个 High 配对点重抽样造成的桥接参数不确定性；B9/B10 的同表偏差敏感性范围另列于 `q4_frontier_predictions.csv`，未叠加到中心预测。该偏差来自估算情景表，不是独立验证集。
 
 ![前沿预测](fig_q4_frontier_forecast.png)
 
-#### C3 经验包络
+### C3 经验包络
 
 {c3_recent_text}
 
@@ -212,7 +263,7 @@ C8 与 C4 的模型标识无法广泛直接配对，因此任务回归规模控�
 
 {envelope_text}
 
-年度有效点较少且集中在近年，预测带可能很宽；这是一条观测锚定的情景带，不是精确前沿预测。
+年度有效点只有 {int(c3_recent.Year.nunique())} 个，线性预测的残差自由度为 1。四个原始 95% 区间均跨出物理定义域 [0,100]，截断后全部退化为 [0,100]；因此 {envelope_not_identifiable} 个区间被标记为 `not_identifiable_df1`，不绘制、不解释为有效预测带。它们只能作为外推失效的诊断证据。
 
 ![C3 经验包络](fig_q4_c3_empirical_envelope.png)
 
@@ -220,13 +271,17 @@ C8 与 C4 的模型标识无法广泛直接配对，因此任务回归规模控�
 
 ![C4 计算覆盖](fig_q4_data_coverage.png)
 
-Q1 的 17 域质量向量中 14 个域为中位数插补，Q̄ 的方差损失为 91.4%，因此 Q4 不把它扩写成已识别的独立技术进步来源。Q3 的对外入口明确为 Pythia classic + B6–B8 quality 混合情景，且与 Q4 一样采用 expanded 边界；该口径不是单一数据集联合拟合。C6 High 组只有 7/75 个点且规模只到 12B，未来前沿因此超出桥接数据覆盖。Q2 的无截距 B9/B10 估算外推集包含 {len(large_residuals)} 个估计点，{large_positive_fraction:.1%} 的残差为正，平均低估 {large_row['mae']:.4f} nats（95% bootstrap 区间 {bias_ci[0]:.4f}–{bias_ci[1]:.4f}；R²={large_row['r2']:.4f}，Spearman={large_row['spearman']:.4f}）。该区间来自估算表自身残差重抽样，不是独立实验置信区间，也不作为已验证的物理校正量。桥接预测只作情景分析，不能把较高的排序相关直接解释为绝对 Loss 校准准确。
+Q1 的 17 域质量向量中 14 个域为中位数插补，Q̄ 的方差损失为 91.4%，因此 Q4 不把它扩写成已识别的独立技术进步来源。Q3 的对外入口明确为 Pythia classic + B6–B8 quality 混合情景，且与 Q4 一样采用 expanded 边界；该口径不是单一数据集联合拟合。C6 可比性分层如下：
+
+{_table(bridge_profile_table)}
+
+C6 High 组只有 7/75 个点且规模只到 12B，未来前沿因此超出桥接数据覆盖。Q2 的无截距 B9/B10 估算外推集包含 {len(large_residuals)} 个估计点，{large_positive_fraction:.1%} 的残差为正，平均低估 {large_row['mae']:.4f} nats（95% bootstrap 区间 {bias_ci[0]:.4f}–{bias_ci[1]:.4f}；R²={large_row['r2']:.4f}，Spearman={large_row['spearman']:.4f}）。该区间来自估算表自身残差重抽样，不是独立实验置信区间，也不作为已验证的物理校正量。桥接预测只作情景分析，不能把较高的排序相关直接解释为绝对 Loss 校准准确。
 
 ## 7 结论
 
 在当前资料和口径下，规模扩张与时间相关变化均与 pretrained 榜单能力相关，但模型 R²={decomp_summary['r2']:.4f}，仍有 {decomp_summary['variance_share_residual']:.1%} 变异未解释。Shapley 方差分解与标准差比均指向规模项占主导，但时间项不能作因果解释。C8 已完成 {n_valid:,} 份有效 JSON 的逐任务汇总；C3 显示任务趋势存在差异，但时间轴主要覆盖 2024–2025。C4 纳入了训练算力、数据量、权重开放、前沿标记、发布日期与访问性字段。
 
-必须强调，Q3 前沿曲线高预算端由可行域角点决定（N=5000B、D=4000B 双上界触顶，Loss*=1.3566），该 Loss 低于 C6 High 桥接支持下界 {bridge_summary['high_loss_min']:.4f}，且六个未来情景均落在该支持域外。因此约 6.48 分应理解为 Pythia 基座桥接下的量级参照/保守下界，而非精确的未来能力前沿点预测。需继续收集同一模型、同一验证集、同一 benchmark 的纵向配对数据，并改善 Q3 高预算支持域后，才能缩窄预测范围。
+必须强调，Q3 前沿曲线高预算端由可行域角点决定（N=5000B、D=4000B 双上界触顶，Loss*=1.3566）。N 上界在 {boundary['n_n_bound']}/{boundary['n_total']} 个网格点触顶（{boundary['share_n_bound']:.1%}），连续覆盖 {boundary['n_bound_budget_min']:.3e}–{boundary['n_bound_budget_max']:.3e} FLOP，期间 Loss 仅下降 {bound_loss_drop:.4f}；这不是末端一个角点，而是曲线顶部的连续边界段。D 上界只在 {boundary['n_d_bound']} 个点触顶。六个未来情景中有 {forecast_q3_outside} 个真正超出 Q3 定义域：{forecast_support_text or '无'}；另有 {forecast_endpoint_count} 个情景取 Q3 端点（{forecast_endpoint_text or '无'}），因此表中重复的端点数值是同一端点复用，不是多次独立稳健性验证。该 Loss 低于 C6 High 桥接支持下界 {bridge_summary['high_loss_min']:.4f}，因此约 6.48 分应理解为 Pythia 基座桥接下的量级参照/保守下界，而非精确的未来能力前沿点预测。需继续收集同一模型、同一验证集、同一 benchmark 的纵向配对数据，并改善 Q3 高预算支持域后，才能缩窄预测范围。
 
 ## 附录 结果文件
 

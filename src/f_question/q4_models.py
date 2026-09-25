@@ -120,18 +120,38 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
     is never silently applied to the central prediction.
     """
     f = frontier.sort_values("budget_flops").drop_duplicates("budget_flops")
-    x = np.log10(pd.to_numeric(f.budget_flops, errors="coerce").to_numpy(float))
+    budget = pd.to_numeric(f.budget_flops, errors="coerce").to_numpy(float)
+    x = np.log10(budget)
     y = pd.to_numeric(f.loss, errors="coerce").to_numpy(float)
+    support_min, support_max = float(budget.min()), float(budget.max())
+    # Treat values within floating-point roundoff of the Q3 support boundary
+    # as boundary points, not as out-of-support extrapolations.
+    support_tol = 1e-10
+    loss_at_min, loss_at_max = float(y[0]), float(y[-1])
     rows = []
     for h in horizons:
         for annual in rates:
             c = recent_compute * annual ** (h/12)
-            loss = float(np.interp(np.log10(c), x, y, left=np.nan, right=np.nan))
-            if not np.isfinite(loss):
-                loss = float(np.interp(np.log10(np.clip(c, 10**x.min(), 10**x.max())), x, y))
-                extrap = True
+            clipped_c = float(np.clip(c, support_min, support_max))
+            below = c < support_min * (1.0 - support_tol)
+            above = c > support_max * (1.0 + support_tol)
+            extrap = bool(below or above)
+            loss = float(np.interp(np.log10(clipped_c), x, y))
+            if below:
+                endpoint = "lower_endpoint"
+                endpoint_multiplier = support_min / c
+            elif above:
+                endpoint = "upper_endpoint"
+                endpoint_multiplier = c / support_max
+            elif np.isclose(c, support_min, rtol=support_tol, atol=0.0):
+                endpoint = "lower_endpoint"
+                endpoint_multiplier = 1.0
+            elif np.isclose(c, support_max, rtol=support_tol, atol=0.0):
+                endpoint = "upper_endpoint"
+                endpoint_multiplier = 1.0
             else:
-                extrap = False
+                endpoint = "interpolated"
+                endpoint_multiplier = 1.0
             score = bridge_summary["intercept"] + bridge_summary["slope"] * loss
             if bridge_boot is not None and not bridge_boot.empty:
                 bridge_scores = (bridge_boot["intercept"].to_numpy(float)
@@ -144,6 +164,11 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
             bias_scores = bridge_summary["intercept"] + bridge_summary["slope"] * biased_losses
             rows.append({"horizon_months": h, "annual_compute_growth": annual, "compute_flops": c,
                          "loss_star": loss, "benchmark_predicted": score, "outside_q3_support": extrap,
+                         "q3_support_min_flops": support_min, "q3_support_max_flops": support_max,
+                         "q3_clipped_compute_flops": clipped_c,
+                         "q3_endpoint": endpoint,
+                         "q3_endpoint_multiplier": float(endpoint_multiplier),
+                         "q3_endpoint_loss": loss_at_min if endpoint == "lower_endpoint" else (loss_at_max if endpoint == "upper_endpoint" else np.nan),
                          "bridge_bootstrap_95ci_low": float(score_ci_low),
                          "bridge_bootstrap_95ci_high": float(score_ci_high),
                          "b9_b10_bias_mean_nats_same_table": float(loss_bias_mean),

@@ -136,7 +136,14 @@ def c4_field_profile(epoch: pd.DataFrame) -> pd.DataFrame:
 
 
 def c3_annual_envelope(timeseries: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Build annual observed envelopes and cautious linear trend scenarios."""
+    """Build annual envelopes and explicitly diagnose forecast identifiability.
+
+    With only three annual points, the ordinary t prediction interval has one
+    residual degree of freedom and expands beyond the physical [0, 100] score
+    domain.  We retain that raw interval for auditability, but mark it as
+    non-identifiable and leave the bounded interval fields missing so it cannot
+    be mistaken for an informative uncertainty band.
+    """
     d = timeseries.copy()
     d["Year"] = pd.to_numeric(d.Year, errors="coerce")
     d["Average"] = pd.to_numeric(d.Average, errors="coerce")
@@ -155,7 +162,23 @@ def c3_annual_envelope(timeseries: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataF
                 residual_se = np.sqrt(np.sum((y-(fit.intercept+fit.slope*x))**2)/dof)
                 se_pred = residual_se * np.sqrt(1 + 1/len(x) + (year-x.mean())**2/np.sum((x-x.mean())**2))
                 crit = stats.t.ppf(.975, dof)
-                rows.append({"metric": metric, "forecast_year": int(year), "estimate": pred,
-                             "prediction_low_95": pred-crit*se_pred, "prediction_high_95": pred+crit*se_pred,
-                             "slope_points_per_year": fit.slope, "n_annual_points": len(x)})
+                raw_low = pred - crit * se_pred
+                raw_high = pred + crit * se_pred
+                identifiable = len(x) >= 5 and dof >= 3
+                rows.append({
+                    "metric": metric,
+                    "forecast_year": int(year),
+                    "estimate": pred,
+                    "raw_prediction_low_95": raw_low,
+                    "raw_prediction_high_95": raw_high,
+                    # Kept for schema compatibility; NaN prevents false precision.
+                    "prediction_low_95": raw_low if identifiable else np.nan,
+                    "prediction_high_95": raw_high if identifiable else np.nan,
+                    "physical_low": 0.0,
+                    "physical_high": 100.0,
+                    "interval_status": "usable_t_interval" if identifiable else "not_identifiable_df1",
+                    "t_dof": dof,
+                    "slope_points_per_year": fit.slope,
+                    "n_annual_points": len(x),
+                })
     return annual, pd.DataFrame(rows)

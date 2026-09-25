@@ -68,7 +68,12 @@ def task_heterogeneity_plot(task: pd.DataFrame, out: Path) -> Path:
 
 
 def envelope_plot(annual: pd.DataFrame, forecast: pd.DataFrame, out: Path) -> Path:
-    """Plot observed annual p90/max and their cautious extrapolation bands."""
+    """Plot observed envelopes and point trend scenarios.
+
+    The current C3 annual fit has only three usable years (df=1). Its t
+    interval is non-identifiable, so it is deliberately not filled as a
+    confidence band.
+    """
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(annual.Year, annual.p90, "o-", label="Observed p90", color="#2A6F97")
     ax.plot(annual.Year, annual.maximum, "o-", label="Observed max", color="#C1443E")
@@ -77,9 +82,13 @@ def envelope_plot(annual: pd.DataFrame, forecast: pd.DataFrame, out: Path) -> Pa
         f = forecast[forecast.metric.eq(metric)].sort_values("forecast_year")
         if len(f):
             ax.plot(f.forecast_year, f.estimate, "--", color=color, label=label)
-            ax.fill_between(f.forecast_year, f.prediction_low_95, f.prediction_high_95,
-                            color=color, alpha=.14)
+            low = pd.to_numeric(f["prediction_low_95"], errors="coerce")
+            high = pd.to_numeric(f["prediction_high_95"], errors="coerce")
+            if low.notna().all() and high.notna().all():
+                ax.fill_between(f.forecast_year, low, high, color=color, alpha=.14)
+    ax.text(0.02, 0.04, "C3 年度点仅 3 个，df=1 的 t 区间未作为有效预测带绘制",
+            transform=ax.transAxes, fontsize=8, color="#555555")
     ax.set(xlabel="C3 publication year", ylabel="Leaderboard Average",
-           title="Observed C3 frontier envelope and trend-based prediction intervals")
+           title="Observed C3 frontier envelope and point trend scenarios", ylim=(0, 100))
     ax.legend(frameon=False); ax.grid(alpha=.2)
     fig.tight_layout(); path = out / "fig_q4_c3_empirical_envelope.png"; fig.savefig(path, bbox_inches="tight"); plt.close(fig); return path

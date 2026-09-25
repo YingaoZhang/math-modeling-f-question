@@ -54,26 +54,37 @@ def add_table(doc: Document, rows: list[list[str]]) -> None:
         sec.right_margin = Inches(0.45)
         sec.top_margin = Inches(0.55)
         sec.bottom_margin = Inches(0.55)
-    table = doc.add_table(rows=len(rows), cols=n)
-    table.style = "Table Grid"
-    hdr = table.rows[0]._tr.get_or_add_trPr()
-    rep = OxmlElement("w:tblHeader"); rep.set(qn("w:val"), "true"); hdr.append(rep)
-    for i, values in enumerate(rows):
-        for j in range(n):
-            c = table.cell(i, j)
-            c.text = values[j] if j < len(values) else ""
-            for p in c.paragraphs:
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER if i == 0 else WD_ALIGN_PARAGRAPH.LEFT
-                p.paragraph_format.space_after = Pt(1)
-                for r in p.runs:
-                    r.font.name = "Microsoft YaHei"
-                    r._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft YaHei")
-                    r.font.size = Pt(6.8 if landscape and i == 0 else (6.5 if landscape else (7.3 if i == 0 else 7.2)))
-                    if i == 0:
-                        r.bold = True; r.font.color.rgb = RGBColor(255, 255, 255)
-            if i == 0:
-                tcpr = c._tc.get_or_add_tcPr(); shd = OxmlElement("w:shd"); shd.set(qn("w:fill"), "315B78"); tcpr.append(shd)
-    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+    if landscape and n > 10:
+        key_cols, part_width = 2, 8
+        groups = [(start, min(start + part_width - key_cols, n))
+                  for start in range(key_cols, n, part_width - key_cols)]
+        table_rows = [[row[:key_cols] + row[start:end] for row in rows] for start, end in groups]
+    else:
+        table_rows = [rows]
+    for part_index, part in enumerate(table_rows):
+        part_n = len(part[0])
+        if len(table_rows) > 1:
+            add_body(doc, f"續表 {part_index + 1}/{len(table_rows)}（重複前兩列作為記錄標識）")
+        table = doc.add_table(rows=len(part), cols=part_n)
+        table.style = "Table Grid"
+        hdr = table.rows[0]._tr.get_or_add_trPr()
+        rep = OxmlElement("w:tblHeader"); rep.set(qn("w:val"), "true"); hdr.append(rep)
+        for i, values in enumerate(part):
+            for j in range(part_n):
+                c = table.cell(i, j)
+                c.text = values[j] if j < len(values) else ""
+                for p in c.paragraphs:
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER if i == 0 else WD_ALIGN_PARAGRAPH.LEFT
+                    p.paragraph_format.space_after = Pt(1)
+                    for r in p.runs:
+                        r.font.name = "Microsoft YaHei"
+                        r._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft YaHei")
+                        r.font.size = Pt(8.0 if landscape else (7.3 if i == 0 else 7.2))
+                        if i == 0:
+                            r.bold = True; r.font.color.rgb = RGBColor(255, 255, 255)
+                if i == 0:
+                    tcpr = c._tc.get_or_add_tcPr(); shd = OxmlElement("w:shd"); shd.set(qn("w:fill"), "315B78"); tcpr.append(shd)
+        doc.add_paragraph().paragraph_format.space_after = Pt(2)
     if landscape:
         doc.add_section(WD_SECTION.NEW_PAGE)
 
@@ -134,6 +145,10 @@ def main() -> None:
     for p in doc.paragraphs:
         if p.text.strip() == "数学建模 F 题统一建模论文":
             p.text = "算力约束下提升大语言模型能力的资源配置建模"
+            p_pr = p._p.get_or_add_pPr()
+            p_bdr = p_pr.find(qn("w:pBdr"))
+            if p_bdr is not None:
+                p_pr.remove(p_bdr)
         elif p.text.strip() == "语料质量评分与大模型训练标度律":
             p.text = "数学建模 F 题完整论文（问题一至问题四）"
     # Replace the short two-question lead with a four-question abstract statement.
@@ -173,6 +188,10 @@ def main() -> None:
     doc.core_properties.subject = "数学建模 F 题完整论文"
     OUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT)
+    # The legacy Q1/Q2 builder is used only as an intermediate source. Keep
+    # the repository delivery to the single integrated paper.
+    if base.exists() and base.resolve() != OUT.resolve():
+        base.unlink()
     print(OUT)
 
 
