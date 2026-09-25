@@ -1,0 +1,6 @@
+﻿source,rows,filtered_rows,model_rows,policy
+C4 epoch_all_ai_models.csv,3523,1390,1390,"compute, dataset-size, open-weight, frontier, date and accessibility fields summarized"
+C1 leaderboard_cleaned.csv,4576,333,330,333 strict pretrained rows; rows missing date excluded from time regression
+C6 loss_benchmark_bridge_expanded.csv,75,7,7,High calibrates; Medium ranking check only
+C8 detailed_results/*.json,1958,4,1954,1954 valid JSON parsed; 4 malformed excluded; official task groups aggregated
+C3 leaderboard_extended_timeseries.csv,4599,6,6,Year used as publication-year axis for task-specific adjusted slopes and annual envelope

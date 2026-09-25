@@ -1,7 +1,7 @@
-parameter,value,fit_stage
-A,2.082391174331089,stage2_beta_relaxed
-B,1.2551649038674146,stage2_beta_relaxed
-alpha,0.06613379367800964,stage2_beta_relaxed
-beta,0.27624940798071945,stage2_beta_relaxed
-beta_prior_B1,0.279878,stage1_fixed_and_stage2_penalty
-beta_penalty_lambda,10.0,stage2_penalty
+parameter,value,fit_stage,ci_low,ci_high
+A,2.082391174331089,stage2_beta_relaxed,2.0544603082300688,2.098262336909867
+B,1.2551649038674146,stage2_beta_relaxed,1.2317229120699063,1.2875643089070088
+alpha,0.06613379367800964,stage2_beta_relaxed,0.0650250101294096,0.06733036922626628
+beta,0.27624940798071945,stage2_beta_relaxed,0.26478518634365017,0.28270153203221293
+beta_prior_B1,0.279878,stage1_fixed_and_stage2_penalty,,
+beta_penalty_lambda,10.0,stage2_penalty,,

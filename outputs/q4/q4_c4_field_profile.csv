@@ -1,0 +1,9 @@
+﻿field,nonmissing,total_rows,coverage,distinct_nonmissing
+Training compute (FLOP),1390,3523,0.3945500993471473,1253
+Training dataset size (total),1424,3523,0.40420096508657394,832
+Parameters,2297,3523,0.6520011353959694,939
+Open model weights?,2653,3523,0.7530513766676128,2
+Frontier model,137,3523,0.03888731195004258,1
+Publication date,3500,3523,0.9934714731762703,1695
+Model accessibility,2653,3523,0.7530513766676128,6
+Training code accessibility,2403,3523,0.6820891285835935,4

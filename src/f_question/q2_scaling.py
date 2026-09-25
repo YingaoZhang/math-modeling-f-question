@@ -29,6 +29,40 @@ class ClassicFit:
     beta_penalty: float = 10.0
 
 
+def bootstrap_classic_scaling(df: pd.DataFrame, n_boot: int = 1000,
+                              random_state: int = 20260924,
+                              beta_prior: float = 0.279878,
+                              beta_penalty: float = 10.0) -> pd.DataFrame:
+    """Bootstrap the B1 no-intercept fit and return parameter draws.
+
+    The resampling is performed at row level on the B1 grid.  Each draw uses
+    the same two-stage fit and beta prior as :func:`fit_classic_scaling`; the
+    output is intended for uncertainty propagation, not model selection.
+    """
+    work = df[["N_params_B", "D_tokens_B", "val_loss"]].apply(pd.to_numeric, errors="coerce").dropna()
+    work = work[(work.N_params_B > 0) & (work.D_tokens_B > 0) & (work.val_loss > 0)].reset_index(drop=True)
+    x = work[["N_params_B", "D_tokens_B"]].to_numpy(float)
+    y = work.val_loss.to_numpy(float)
+    rng = np.random.default_rng(random_state)
+    rows = []
+    for draw in range(int(n_boot)):
+        idx = rng.integers(0, len(work), len(work))
+        xb, yb = x[idx], y[idx]
+        def residual_stage1(z: np.ndarray) -> np.ndarray:
+            return classic_prediction(xb, np.r_[z, beta_prior]) - yb
+        init3 = np.array([max(0.5, float(np.median(yb)) * .7), 1.0, .3])
+        fit1 = least_squares(residual_stage1, init3,
+                             bounds=([0, 0, .01], [100, 100, 2.0]), max_nfev=2000)
+        def residual_stage2(z: np.ndarray) -> np.ndarray:
+            return np.r_[classic_prediction(xb, z) - yb,
+                         np.sqrt(beta_penalty) * (z[3] - beta_prior)]
+        fit = least_squares(residual_stage2, np.r_[fit1.x, beta_prior],
+                            bounds=([0, 0, .01, .01], [100, 100, 2.0, 2.0]), max_nfev=3000)
+        rows.append({"bootstrap_draw": draw, "A": fit.x[0], "B": fit.x[1],
+                     "alpha": fit.x[2], "beta": fit.x[3]})
+    return pd.DataFrame(rows)
+
+
 def _metrics(y: np.ndarray, pred: np.ndarray) -> dict[str, float]:
     return {
         "r2": float(r2_score(y, pred)),

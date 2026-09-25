@@ -1,0 +1,2 @@
+﻿n_estimated_rows,mean_residual_nats,bias_ci_low_nats,bias_ci_high_nats,mae_uncorrected_nats,mae_bias_corrected_same_table_diagnostic_nats,r2_uncorrected,r2_bias_corrected_same_table_diagnostic,data_status
+128,0.31088634094696066,0.2992204452257799,0.32360358989869786,0.31088634094696066,0.058275299041493644,0.356099654850238,0.9683202585553906,"estimated B9/B10 scenarios; same-table bias correction is descriptive, not independent validation"

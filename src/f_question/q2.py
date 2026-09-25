@@ -15,7 +15,8 @@ from sklearn.metrics import mean_absolute_error, r2_score
 
 from .q2_scaling import (fit_classic_scaling, cross_validate_classic,
                          fit_quality_effect, fit_asymmetric_quality_effect,
-                         b1_grid_diagnostics, asymmetric_quality_prediction)
+                         b1_grid_diagnostics, asymmetric_quality_prediction,
+                         bootstrap_classic_scaling)
 from .q2_validation import (external_validation, trajectory_validation, large_scale_extrapolation,
                             b2_recalibration, affine_bridge_test, mrtS_table, summarize_mrts,
                             second_order_summary)
@@ -59,9 +60,22 @@ def run() -> dict:
     b1 = pd.read_csv(DATA_ROOT / "pythia_training_log_existing.csv")
     model, diag = fit_classic_scaling(b1)
     cv = cross_validate_classic(b1)
+    print("【实证检验】B1 参数 bootstrap（1000 次）")
+    b1_boot = bootstrap_classic_scaling(b1, n_boot=1000)
+    b1_boot.to_csv(OUT / "q2_b1_bootstrap_draws.csv", index=False)
+    ci_rows = []
+    for parameter in ["A", "B", "alpha", "beta"]:
+        ci_rows.append({"parameter": parameter, "estimate": float(model.params[["A", "B", "alpha", "beta"].index(parameter)]),
+                        "ci_low": float(b1_boot[parameter].quantile(.025)),
+                        "ci_high": float(b1_boot[parameter].quantile(.975)),
+                        "bootstrap_n": int(len(b1_boot))})
+    b1_ci = pd.DataFrame(ci_rows)
+    b1_ci.to_csv(OUT / "q2_b1_parameter_ci.csv", index=False)
     diag.to_csv(OUT / "q2_b1_predictions.csv", index=False)
     cv.to_csv(OUT / "q2_b1_cv_metrics.csv", index=False)
-    coef_rows = [{"parameter": k, "value": v, "fit_stage": "stage2_beta_relaxed"}
+    ci_map = b1_ci.set_index("parameter").to_dict("index")
+    coef_rows = [{"parameter": k, "value": v, "fit_stage": "stage2_beta_relaxed",
+                  "ci_low": ci_map[k]["ci_low"], "ci_high": ci_map[k]["ci_high"]}
                  for k, v in zip(["A", "B", "alpha", "beta"], model.params)]
     coef_rows += [{"parameter": "beta_prior_B1", "value": model.beta_prior, "fit_stage": "stage1_fixed_and_stage2_penalty"},
                   {"parameter": "beta_penalty_lambda", "value": model.beta_penalty, "fit_stage": "stage2_penalty"}]
@@ -157,6 +171,31 @@ def run() -> dict:
 
     large_metrics, large = large_scale_extrapolation(DATA_ROOT / "supplementary_large_models.csv", DATA_ROOT / "supplementary_large_baseline.csv", model)
     large_metrics.to_csv(OUT / "q2_large_scale_metrics.csv", index=False); large.to_csv(OUT / "q2_large_scale_extrapolation.csv", index=False)
+    # B9/B10 are estimated scenarios.  The constant-bias correction below is
+    # a same-table diagnostic, not an independently validated correction.
+    residual = pd.to_numeric(large["residual"], errors="coerce").dropna().to_numpy(float)
+    rng = np.random.default_rng(20260925)
+    draws = np.array([rng.choice(residual, len(residual), replace=True).mean() for _ in range(4000)])
+    bias = float(residual.mean())
+    corrected = large.copy()
+    corrected["bias_corrected_prediction_diagnostic"] = corrected["predicted_loss"] + bias
+    corrected["bias_corrected_residual_diagnostic"] = corrected["val_loss"] - corrected["bias_corrected_prediction_diagnostic"]
+    corrected[["family", "N_params_B", "D_tokens_B", "val_loss", "predicted_loss", "residual",
+               "bias_corrected_prediction_diagnostic", "bias_corrected_residual_diagnostic"]].to_csv(
+        OUT / "q2_large_scale_bias_sensitivity.csv", index=False, encoding="utf-8-sig")
+    bias_summary = pd.DataFrame([{
+        "n_estimated_rows": len(residual), "mean_residual_nats": bias,
+        "bias_ci_low_nats": float(np.quantile(draws, .025)),
+        "bias_ci_high_nats": float(np.quantile(draws, .975)),
+        "mae_uncorrected_nats": float(np.mean(np.abs(residual))),
+        "mae_bias_corrected_same_table_diagnostic_nats": float(np.mean(np.abs(residual-bias))),
+        "r2_uncorrected": float(r2_score(large["val_loss"], large["predicted_loss"])),
+        "r2_bias_corrected_same_table_diagnostic": float(r2_score(large["val_loss"], large["predicted_loss"]+bias)),
+        "data_status": "estimated B9/B10 scenarios; same-table bias correction is descriptive, not independent validation"
+    }])
+    bias_summary.to_csv(OUT / "q2_large_scale_bias_summary.csv", index=False, encoding="utf-8-sig")
+    print(f"【实证检验通过】B9/B10 估算表残差偏差={bias:.4f} nats, bootstrap 95% CI "
+          f"[{np.quantile(draws, .025):.4f}, {np.quantile(draws, .975):.4f}]；同表校正仅作诊断")
     print("【边界声明】B9/B10 为超百亿规模外推情景工具，不作为独立实验验证")
     plt.figure(figsize=(7, 4)); plt.scatter(large.N_params_B, large.val_loss, s=12, alpha=.45, label="estimated observed"); plt.scatter(large.N_params_B, large.predicted_loss, s=12, alpha=.45, label="classic prediction"); plt.xscale("log"); plt.xlabel("N parameters (B)"); plt.ylabel("loss"); plt.title("Large-scale scenario extrapolation"); plt.legend(); _savefig(OUT / "fig_q2_large_scale_extrapolation.png")
 

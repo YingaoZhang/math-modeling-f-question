@@ -18,3 +18,6 @@ data/raw/real_attachments/A_data_value/slimpajama_quality_signal_sample.jsonl.xz
 ~$*
 outputs/q2/docx_render/
 outputs/q2/pdf_render*/
+outputs/render_*/
+outputs/完整论文检查.pdf
+outputs/**/render_qa*/

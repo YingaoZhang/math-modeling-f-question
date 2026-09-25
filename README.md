@@ -1,6 +1,6 @@
 # F 题数学建模项目
 
-本项目完成数学建模 F 题两问：第一问的语料质量评分、质量冲突分析和逐域配比—验证 Loss 建模，以及第二问的参数规模标度律与物理纠偏。分析代码、统一论文、结果表格和插图均纳入仓库；原始附件的数据边界和超大文件获取说明见 [`data/README.md`](data/README.md)。
+本项目包含数学建模 F 题前四问的可复现分析、结果表和论文。第一问评估语料质量并逐域建模配比与 The Pile Loss；第二问拟合 Pythia 标度律并分析质量效应；第三问在预算约束下优化配置；第四问分析模型效率前沿和规模—时间贡献。原始附件的数据边界和超大文件获取说明见 [`data/README.md`](data/README.md)。
 
 ## 环境与运行
 
@@ -9,15 +9,18 @@
 ```powershell
 python -m pip install -e .
 python -m f_question.q1
+python -m f_question.q2
+python -m f_question.q3
+python -m f_question.q4
 ```
 
-从已有 CSV 结果重建统一论文：
+从已有结果重建论文：
 
 ```powershell
-C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe build_unified_docx.py
+python build_unified_docx.py
 ```
 
-命令行可通过 `--data` 指定附件目录。两问完整结果和口径边界见 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)。
+命令行可通过 `--data` 指定附件目录。四问统一结果、方法、图表和附录见 [`outputs/数学建模F题完整论文.docx`](outputs/数学建模F题完整论文.docx)；第一、二问的独立构建结果见 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)，第三问见 [`outputs/q3/第三问完整论文.docx`](outputs/q3/第三问完整论文.docx)，第四问见 [`outputs/q4/第四问完整论文.docx`](outputs/q4/第四问完整论文.docx)。Q4 会审计 C8 JSON：4 个无法解析的文件标记为损坏并排除，其余可解析 JSON 也按预先设定的数据边界排除，建模只读 CSV 汇总表。
 
 ## 项目结构
 
@@ -27,7 +30,10 @@ data/raw/real_attachments/  可公开提交的原始附件子集；超大附件�
 src/f_question/             可复现分析代码
 outputs/q1/                  第一问 CSV 表格和插图
 outputs/q2/                  第二问 CSV 表格和插图
-outputs/数学建模F题统一论文.docx  两问合并后的唯一论文文档
+outputs/数学建模F题完整论文.docx  问题一至问题四统一论文
+outputs/数学建模F题统一论文.docx  第一、二问独立合并论文
+outputs/q3/第三问完整论文.docx    第三问完整论文
+outputs/q4/第四问完整论文.docx    第四问完整论文
 ```
 
 ## 第一问结果摘要
@@ -39,7 +45,7 @@ outputs/数学建模F题统一论文.docx  两问合并后的唯一论文文档
 
 全部计算指标、敏感性表、数据边界和插图均见 `outputs/q1/`。
 
-两问完整流程、模型形式、验证结果和图表集中在 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)，避免多个版本造成口径分散。
+第一、二问完整流程、模型形式、验证结果和图表集中在 [`outputs/数学建模F题统一论文.docx`](outputs/数学建模F题统一论文.docx)；第三、四问分别使用各自的完整 Word 论文，避免在不同版本之间混用口径。
 
 ## 分析模块
 
@@ -59,4 +65,5 @@ $env:PYTHONPATH='src'
 .venv\Scripts\python.exe -m f_question.q2
 ```
 
-第二问不再单独生成报告文档，结果表和插图保存在 `outputs/q2/`，统一论文由 `build_unified_docx.py` 汇总生成。
+第二问结果表和插图保存在 `outputs/q2/`，与第一问一并收录在统一论文；第三、四问分别由 `src/f_question/q3.py`、`src/f_question/q4.py` 运行，并可用 `tools/build_q4_docx.py` 从结果 Markdown 重建第四问 Word。
+

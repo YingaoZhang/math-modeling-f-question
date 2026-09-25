@@ -1,0 +1,6 @@
+﻿loss_domain,domain_a,domain_b,donor_domain,transfer_each,nonadditive_delta_loss,absolute_nonadditive_delta_loss,effect_source,abs_effect
+metric/the_pile_github_val_loss,stackexchange,github,pile_cc,0.05,0.24865643451531927,0.25216907693205753,independent test quadratic model,0.25216907693205753
+metric/the_pile_stackexchange_val_loss,stackexchange,github,pile_cc,0.05,0.1919375487861455,0.19385101040125738,independent test quadratic model,0.19385101040125738
+metric/the_pile_arxiv_val_loss,stackexchange,arxiv,github,0.05,0.16607046041655735,0.17750833892023132,independent test quadratic model,0.17750833892023132
+metric/the_pile_wikipedia_en_val_loss,wikipedia_en,pile_cc,github,0.05,0.12990425132125086,0.13194998367796232,independent test quadratic model,0.13194998367796232
+metric/the_pile_dm_mathematics_val_loss,freelaw,pubmed_central,arxiv,0.05,-0.11805725937536694,0.11817639471916408,independent test quadratic model,0.11817639471916408

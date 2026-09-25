@@ -1,0 +1,27 @@
+{
+  "loss_scale": "Pythia val_loss",
+  "source": "outputs/q3/q3_loss_frontier_curve.csv",
+  "bridge_column": "Val_Loss",
+  "frontier_method": "piecewise log-budget interpolation of Q3 optimized scenarios",
+  "coefficient_source": "b1 classic coefficients + B6-B8 lambda=10 quality term (mixed convention)",
+  "n_upper_bound_B": 5000.0,
+  "d_upper_bound_B": 4000.0,
+  "q1_quality_imputation_note": "14 of 17 domain Q values are median-imputed; Qbar is weak evidence",
+  "c8_json_policy": "C8 detailed JSON excluded; CSV summaries only",
+  "bridge_high_n": 7,
+  "bridge_policy": "High only for calibration; Medium only for ranking validation",
+  "large_scale_bias_note": "B9/B10 are estimated scenarios, not experiments; the no-intercept model underpredicts by a mean 0.3109 nats. This is a diagnostic interval, not a verified physical correction.",
+  "large_scale_bias": {
+    "n_estimated_rows": 128,
+    "mean_residual_nats": 0.31088634094696055,
+    "bootstrap_95ci_nats": [
+      0.2992204452257799,
+      0.32360358989869775
+    ],
+    "r2_before": 0.356099654850238,
+    "mae_before_nats": 0.3108863409469606,
+    "status": "estimated-table residuals only; not independent experimental validation"
+  },
+  "q1_qbar_variance_loss_fraction": 0.9143158416959638,
+  "q4_loss_calibration_policy": "C6 High Pythia rows only (n=7/75); Medium rows are ranking checks only"
+}
