@@ -19,7 +19,7 @@ from .indicators import indicator_protocol
 
 def run_conflict_diagnostics(a_dir: Path, quality_a1: pd.DataFrame, a1_raw: pd.DataFrame,
                              references: dict[str, pd.Series], quality_raw_frame, score_quality,
-                             out: Path) -> None:
+                             out: Path, lambda_penalty: float = 0.25) -> None:
     rates, pairs, cause_rows = [], [], []
     populations = [("A1", quality_a1)]
     extension_specs = [
@@ -112,7 +112,8 @@ def run_conflict_diagnostics(a_dir: Path, quality_a1: pd.DataFrame, a1_raw: pd.D
         sens.loc[idx, "conflict_P75_P25"] = float((rank.ge(.75).any(axis=1) & rank.le(.25).any(axis=1)).mean())
     sens.to_csv(out / "conflict_all22_sensitivity.csv", index=False)
 
-    # Lambda is a descriptive sensitivity because document Q is not paired to recipe Loss.
+    # rho is a documented engineering penalty.  The full sensitivity table is
+    # retained; the selected value is additionally exposed as the main score.
     penalty_rows = []
     for lam in [0.0, 0.1, 0.25, 0.5, 1.0]:
         adjusted = penalized_score(quality_a1, lam)
@@ -122,6 +123,9 @@ def run_conflict_diagnostics(a_dir: Path, quality_a1: pd.DataFrame, a1_raw: pd.D
                              "loss_cv_delta": np.nan,
                              "interpretation": "descriptive Q re-ranking; document Q and mixture Loss have no paired observations"})
     pd.DataFrame(penalty_rows).to_csv(out / "conflict_penalty_sensitivity.csv", index=False)
+    quality_a1.assign(Q_star=penalized_score(quality_a1, lambda_penalty),
+                      rho_main=lambda_penalty).to_csv(out / "quality_scores_A1_with_conflict_penalty.csv.gz",
+                                                       index=False, compression="gzip")
 
     # Save per-domain Q* summaries and bootstrap-ready row scores for reproducibility.
     for lam in [0.0, 0.1, 0.25, 0.5, 1.0]:

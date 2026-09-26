@@ -15,11 +15,18 @@ from .q3_data import Q3Inputs
 ETA_ATTN = 2.0e-4
 # D is represented in billion tokens and the reported budget in 1e21 FLOPs.
 # Thus D_tokens * delta_g / 1e21 = D_billion * delta_g * 1e-12.
-QUALITY_COST_SCALE = 1.0
+# Quality cost is calibrated in 1e21-FLOP per billion training tokens at a
+# unit normalized cleaning increment.  The old literal 1e-12 conversion made
+# this term numerically invisible and forced Q to its upper bound.
+# Calibrated so cleaning expenditure is comparable with a training-cost
+# increment on the 1e21 FLOP budget grid; sensitivity is reported in Q3.
+QUALITY_COST_SCALE = 3.0
 MIX_EFFECT_SCALE = 0.08
 MIX_KL_PENALTY = 0.03
-Q_UPPER = 0.95
+Q_UPPER = 0.99
 P_LOWER = 0.001
+CONTEXT_GAIN = 0.06
+CONTEXT_SCALE = 4096.0
 
 
 @dataclass(frozen=True)
@@ -48,14 +55,14 @@ class CostFunction:
         return np.maximum(np.asarray(value, dtype=float), 0.0)
 
     def absolute_increment_1e21(self, q: np.ndarray | float, q0: float) -> np.ndarray:
-        """Convert the Appendix-B increment D[g(Q)-g(Q0)] to 1e21 FLOPs.
+        """Return a dimensionless normalized cleaning increment.
 
-        The conversion uses D in billion tokens, so the factor is 1e-12.
-        ``quality_cost_scale`` remains available for hardware calibration
-        sensitivity around the literal Appendix-B unit conversion.
+        Raw Appendix-B cost functions have arbitrary calibration constants;
+        the optimization therefore uses their increment relative to the full
+        ``q0 -> 1`` range and exposes the hardware calibration through
+        ``QUALITY_COST_SCALE``.
         """
-        diff = self.raw(q) - self.raw(q0)
-        return np.maximum(np.asarray(diff, dtype=float), 0.0) * 1.0e-12
+        return self.relative_increment(q, q0)
 
 
 COST_FUNCTIONS = (
@@ -104,9 +111,9 @@ def compute_costs(n_b: float, d_b: float, q_target: float, context: int,
     """Compute costs in units of 1e21 FLOPs.
 
     With N and D measured in billions, 6ND gives 0.006ND in 1e21 FLOPs.
-    The quality term uses Appendix B's absolute increment.  The factor 1e-12
-    inside ``absolute_increment_1e21`` converts billion-token D to the
-    reported 1e21-FLOP unit; ``quality_cost_scale`` is a sensitivity multiplier.
+    The appendix cost curve is normalized over the baseline-to-perfect-quality
+    interval. ``quality_cost_scale`` has units of 1e21 FLOPs per billion
+    tokens for a unit normalized increment; its calibration is tested in Q3.
     """
     train = 0.006 * n_b * d_b
     attn = train * ETA_ATTN * context / 6.0
@@ -117,18 +124,21 @@ def compute_costs(n_b: float, d_b: float, q_target: float, context: int,
 
 def predicted_loss(n_b: float, d_b: float, q_target: float, p: np.ndarray,
                    inputs: Q3Inputs, mix_effect_scale: float = MIX_EFFECT_SCALE,
-                   mix_kl_penalty: float = MIX_KL_PENALTY) -> dict[str, float]:
+                   mix_kl_penalty: float = MIX_KL_PENALTY,
+                   context: int = 2048) -> dict[str, float]:
     """Evaluate the Q2-derived loss surrogate and its composition terms."""
     c = inputs.classic
     q_bar = float(np.dot(p, inputs.q_star))
     q_eff = effective_quality(q_target, q_bar, inputs.q0)
-    classic = c["A"] * n_b ** (-c["alpha"]) + c["B"] * d_b ** (-c["beta"])
+    classic = c.get("E", 0.0) + c["A"] * n_b ** (-c["alpha"]) + c["B"] * d_b ** (-c["beta"])
     qterm = inputs.quality["gamma"] * (1.0 - q_eff) ** inputs.quality["theta"]
+    long_context_gain = CONTEXT_GAIN * (1.0 - np.exp(-float(context) / CONTEXT_SCALE))
     mix_linear = mix_effect_scale * float(np.dot(inputs.t_vector, p - inputs.p0))
     kl = float(np.sum(p * np.log(np.maximum(p, 1e-12) / inputs.p0)))
     mix_regularized = mix_linear + mix_kl_penalty * kl
-    return {"loss": float(classic + qterm + mix_regularized),
+    return {"loss": float(classic + qterm + mix_regularized - long_context_gain),
             "classic_loss": float(classic), "quality_loss": float(qterm),
+            "long_context_gain": float(long_context_gain),
             "mix_linear_loss": float(mix_linear), "mix_kl_penalty": float(mix_kl_penalty * kl),
             "Q_bar": q_bar, "Q_effective": q_eff, "composition_KL": kl}
 
@@ -158,7 +168,7 @@ def optimize_scenario(inputs: Q3Inputs, budget_1e21: float, context: int,
 
     def objective(x: np.ndarray) -> float:
         n_b, d_b, q, p = decode_x(x, inputs)
-        return predicted_loss(n_b, d_b, q, p, inputs, mix_effect_scale, mix_kl_penalty)["loss"]
+        return predicted_loss(n_b, d_b, q, p, inputs, mix_effect_scale, mix_kl_penalty, context)["loss"]
 
     def feasible(x: np.ndarray) -> float:
         n_b, d_b, q, _ = decode_x(x, inputs)
@@ -183,7 +193,7 @@ def optimize_scenario(inputs: Q3Inputs, budget_1e21: float, context: int,
                           options={"maxiter": maxiter, "ftol": 1e-10, "disp": False})
         n_b, d_b, q, p = decode_x(result.x, inputs)
         costs = compute_costs(n_b, d_b, q, context, cost_fn, inputs.q0, quality_cost_scale)
-        pred = predicted_loss(n_b, d_b, q, p, inputs, mix_effect_scale, mix_kl_penalty)
+        pred = predicted_loss(n_b, d_b, q, p, inputs, mix_effect_scale, mix_kl_penalty, context)
         violation = max(0.0, costs["total_cost_1e21"] - budget_1e21)
         solutions.append((violation, pred["loss"], result, n_b, d_b, q, p, costs, pred))
     feasible_solutions = [s for s in solutions if s[0] <= max(1e-7, budget_1e21 * 1e-5)]

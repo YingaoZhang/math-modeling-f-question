@@ -16,7 +16,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from .q2_scaling import (fit_classic_scaling, cross_validate_classic,
                          fit_quality_effect, fit_asymmetric_quality_effect,
                          b1_grid_diagnostics, asymmetric_quality_prediction,
-                         bootstrap_classic_scaling)
+                         bootstrap_classic_scaling, classic_prediction)
 from .q2_validation import (external_validation, trajectory_validation, large_scale_extrapolation,
                             b2_recalibration, affine_bridge_test, mrtS_table, summarize_mrts,
                             second_order_summary)
@@ -64,8 +64,9 @@ def run() -> dict:
     b1_boot = bootstrap_classic_scaling(b1, n_boot=1000)
     b1_boot.to_csv(OUT / "q2_b1_bootstrap_draws.csv", index=False)
     ci_rows = []
-    for parameter in ["A", "B", "alpha", "beta"]:
-        ci_rows.append({"parameter": parameter, "estimate": float(model.params[["A", "B", "alpha", "beta"].index(parameter)]),
+    coef_names = ["E", "A", "B", "alpha", "beta"]
+    for parameter in coef_names:
+        ci_rows.append({"parameter": parameter, "estimate": float(model.coefficient_map[parameter]),
                         "ci_low": float(b1_boot[parameter].quantile(.025)),
                         "ci_high": float(b1_boot[parameter].quantile(.975)),
                         "bootstrap_n": int(len(b1_boot))})
@@ -76,7 +77,7 @@ def run() -> dict:
     ci_map = b1_ci.set_index("parameter").to_dict("index")
     coef_rows = [{"parameter": k, "value": v, "fit_stage": "stage2_beta_relaxed",
                   "ci_low": ci_map[k]["ci_low"], "ci_high": ci_map[k]["ci_high"]}
-                 for k, v in zip(["A", "B", "alpha", "beta"], model.params)]
+                 for k, v in model.coefficient_map.items()]
     coef_rows += [{"parameter": "beta_prior_B1", "value": model.beta_prior, "fit_stage": "stage1_fixed_and_stage2_penalty"},
                   {"parameter": "beta_penalty_lambda", "value": model.beta_penalty, "fit_stage": "stage2_penalty"}]
     pd.DataFrame(coef_rows).to_csv(OUT / "q2_b1_fit_coefficients.csv", index=False)
@@ -84,7 +85,7 @@ def run() -> dict:
     grid.to_csv(OUT / "q2_b1_grid_structure.csv", index=False)
     leave_n.to_csv(OUT / "q2_b1_leave_one_n.csv", index=False)
     pair_hold.to_csv(OUT / "q2_b1_group_holdout_metrics.csv", index=False)
-    print(f"【实证检验通过】B1 解析网格诊断: {int(grid.n_rows.iloc[0])} 行, {int(grid.n_N.iloc[0])}x{int(grid.n_D.iloc[0])}; 无截距两阶段拟合完成")
+    print(f"【实证检验通过】B1 解析网格诊断: {int(grid.n_rows.iloc[0])} 行, {int(grid.n_N.iloc[0])}x{int(grid.n_D.iloc[0])}; 带不可约损失 E 的两阶段拟合完成")
     plt.figure(figsize=(6.2, 5)); plt.scatter(diag.val_loss, diag.predicted_loss, s=10, alpha=.35)
     lo, hi = float(diag.val_loss.min()), float(diag.val_loss.max()); plt.plot([lo, hi], [lo, hi], "k--")
     plt.xlabel("Observed B1 val_loss"); plt.ylabel("Predicted classic scaling loss"); plt.title("B1 observed versus predicted")
@@ -145,7 +146,7 @@ def run() -> dict:
     q_sensitivity.to_csv(OUT / "q2_quality_effect_coefficients.csv", index=False)
     q_pred.to_csv(OUT / "q2_quality_predictions.csv", index=False)
     from scipy.stats import pearsonr
-    base_pred = model.params[0]*q_all.N_params_B.to_numpy(float)**(-model.params[2]) + model.params[1]*q_all.D_tokens_B.to_numpy(float)**(-model.params[3])
+    base_pred = classic_prediction(q_all[["N_params_B", "D_tokens_B"]].to_numpy(float), model.params)
     lv = linear_coef.set_index("coefficient")["value"]
     old_derivative = (lv["Q_centered"] + lv["QxN_term"] * q_all.N_params_B.to_numpy(float) ** (-model.feature_exponents[0])
                       + lv["QxD_term"] * q_all.D_tokens_B.to_numpy(float) ** (-model.feature_exponents[1]))
@@ -199,14 +200,14 @@ def run() -> dict:
     print("【边界声明】B9/B10 为超百亿规模外推情景工具，不作为独立实验验证")
     plt.figure(figsize=(7, 4)); plt.scatter(large.N_params_B, large.val_loss, s=12, alpha=.45, label="estimated observed"); plt.scatter(large.N_params_B, large.predicted_loss, s=12, alpha=.45, label="classic prediction"); plt.xscale("log"); plt.xlabel("N parameters (B)"); plt.ylabel("loss"); plt.title("Large-scale scenario extrapolation"); plt.legend(); _savefig(OUT / "fig_q2_large_scale_extrapolation.png")
 
-    qp = q_sensitivity[q_sensitivity["lambda"] == 1].iloc[0][["A", "B", "gamma", "alpha", "beta", "theta"]].to_numpy(float)
+    qp = q_sensitivity[q_sensitivity["lambda"] == 1].iloc[0][["E", "A", "B", "gamma", "alpha", "beta", "theta"]].to_numpy(float)
     mrt = mrtS_table(model, qp, q_quality=.65, q_step=.1); mrt.to_csv(OUT / "q2_mrts_equivalence_table.csv", index=False)
     summarize_mrts(mrt).to_csv(OUT / "q2_mrts_summary.csv", index=False)
     mrt.to_csv(OUT / "q2_elasticities.csv", index=False)
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
     grids = [("elasticity_N", "Parameter elasticity"), ("elasticity_D", "Data elasticity"), ("marginal_quality", "Quality marginal utility")]
     # Add data elasticity and positive quality utility fields for the plot/table.
-    A,B,gamma,alpha,beta,theta=qp
+    E,A,B,gamma,alpha,beta,theta=qp
     mrt["elasticity_D"] = (-beta*B*mrt.D_tokens_B.to_numpy(float)**(-beta))/mrt.loss.to_numpy(float)
     mrt["marginal_quality"] = -mrt.dL_dQ_quality
     mrt.to_csv(OUT / "q2_elasticities.csv", index=False)
@@ -221,6 +222,14 @@ def run() -> dict:
     bridge_rows = pd.DataFrame({"domain": list(qstar), "Q_star": [qstar[k] for k in qstar], "t_first_order": [tvec.get(k, np.nan) for k in qstar], "Q_status": [bridge.get("Q_star_status", {}).get(k, "unknown") for k in qstar]})
     bridge_rows.to_csv(OUT / "q2_domain_substitution_effects.csv", index=False)
     second_order_summary(bridge).to_csv(OUT / "q2_second_order_nonadditivity_summary.csv", index=False)
+    # Explicit generalized interface for Problem 2: composition enters through
+    # ILR log-contrasts, hence coefficients are relative replacement effects.
+    pd.DataFrame([
+        {"term": "scale", "formula": "E + A*N^(-alpha) + B*D^(-beta)", "source": "B1", "identification_status": "estimated"},
+        {"term": "quality", "formula": "gamma*q_defect^theta", "source": "B6-B8", "identification_status": "conditional calibration"},
+        {"term": "mix_first_order", "formula": "t_ILR^T z(p)", "source": "Q1 quadratic model", "identification_status": "model-conditional"},
+        {"term": "mix_second_order", "formula": "0.5*z(p)^T H z(p)", "source": "Q1 quadratic model", "identification_status": "model-conditional nonadditivity"},
+    ]).to_csv(OUT / "q2_generalized_scaling_interface.csv", index=False, encoding="utf-8-sig")
     affine_bridge_test(PROJECT_ROOT / "data/raw/real_attachments/C_efficiency_evolution/loss_benchmark_bridge_expanded.csv").to_csv(OUT / "q2_affine_bridge_test_results.csv", index=False)
     _deidentified_a18().to_csv(OUT / "q2_A18_deidentified_domain_examples.csv", index=False)
     pd.DataFrame([{"item": "B1", "source": "real Pythia log", "used_as": "complete analytical N-D grid; structured diagnostics"}, {"item": "B2", "source": "Cerebras", "used_as": "external ranking plus affine recalibration"}, {"item": "B3", "source": "interpolated trajectories", "used_as": "same-family validation"}, {"item": "B4/B5", "source": "cross-family/literature", "used_as": "ranking validation"}, {"item": "B6-B8", "source": "native Q_score experiments", "used_as": "physical asymmetric defect-rate effect"}, {"item": "B9/B10", "source": "estimated large-scale tables", "used_as": "scenario sensitivity only"}, {"item": "A interface", "source": "Question 1 bridge", "used_as": "Q_bar(p), ILR substitution and conditional second-order effects"}]).to_csv(OUT / "q2_input_usage_boundary.csv", index=False)

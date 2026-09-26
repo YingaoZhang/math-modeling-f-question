@@ -118,6 +118,39 @@ def c3_task_heterogeneity(timeseries: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("task").reset_index(drop=True)
 
 
+def c8_task_scale_heterogeneity(task_scores: pd.DataFrame) -> pd.DataFrame:
+    """Fit C8 task score against model scale without using evaluation time.
+
+    C8 ``date_utc`` is an evaluation timestamp rather than a publication date,
+    so this is a cross-sectional model only.  The output remains separate from
+    :func:`c3_task_heterogeneity` because their samples and score scales differ.
+    """
+    columns = ["task", "n", "scale_slope_points_per_log10_params", "r2",
+               "spearman_rho", "params_coverage"]
+    if task_scores.empty or not {"task", "score", "params_b_c1"}.issubset(task_scores.columns):
+        return pd.DataFrame(columns=columns)
+    d = task_scores.copy()
+    d["score"] = pd.to_numeric(d["score"], errors="coerce")
+    d["params_b_c1"] = pd.to_numeric(d["params_b_c1"], errors="coerce")
+    rows: list[dict[str, Any]] = []
+    for task, group in d.groupby("task", sort=True):
+        valid = group[group["score"].notna() & group["params_b_c1"].gt(0)].copy()
+        if len(valid) < 5:
+            continue
+        x = np.log10(valid["params_b_c1"].to_numpy(float))
+        y = valid["score"].to_numpy(float)
+        fit = stats.linregress(x, y)
+        pred = fit.intercept + fit.slope * x
+        total = float(np.sum((y - y.mean()) ** 2))
+        r2 = 1.0 - float(np.sum((y - pred) ** 2)) / total if total > 0 else np.nan
+        rows.append({"task": str(task), "n": int(len(valid)),
+                     "scale_slope_points_per_log10_params": float(fit.slope),
+                     "r2": float(r2),
+                     "spearman_rho": float(stats.spearmanr(x, y).statistic),
+                     "params_coverage": float(len(valid) / len(group))})
+    return pd.DataFrame(rows, columns=columns).sort_values("task").reset_index(drop=True)
+
+
 def c4_field_profile(epoch: pd.DataFrame) -> pd.DataFrame:
     """Summarize coverage and association of required C4 fields."""
     d = epoch.copy()

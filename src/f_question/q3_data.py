@@ -46,9 +46,9 @@ def _read_coefficients(q2_dir: Path) -> tuple[dict[str, dict[str, float]], dict[
     """
     classic_path = q2_dir / "q2_b1_fit_coefficients.csv"
     quality_path = q2_dir / "q2_quality_effect_coefficients.csv"
-    b1 = {"A": 2.0823911743, "B": 1.2551649039,
-          "alpha": 0.0661337937, "beta": 0.2762494080}
-    b68 = {"A": 0.8111223285, "B": 0.5641070701,
+    b1 = {"E": 1.6897677882, "A": 0.3540135531, "B": 1.2402868555,
+          "alpha": 0.3399571273, "beta": 0.2798761245}
+    b68 = {"E": 1.60617, "A": 0.8111223285, "B": 0.5641070701,
            "alpha": 0.2334249279, "beta": 0.2625033577}
     quality10 = {"gamma": 1.5164923304, "theta": 1.0868284874}
     if classic_path.exists():

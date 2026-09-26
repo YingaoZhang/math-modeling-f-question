@@ -508,7 +508,7 @@ def write_report(q_summary, critic, entropy, metrics, model_compare):
 
 $$Q_i=\\sum_g \\omega_g Q_{{ig}},\\quad Q_i\\in(0,1],\\quad \\sum_g\\omega_g=1.$$
 
-等权用于主口径；CRITIC 和熵权仅为无监督敏感性对照。监督式 Meta-rater 权重不从无配对数据中拟合：A16 只映射 6/17 配方域，且配方实验没有文档级质量标签，无法将域差异与质量效应分开。A2/A3 全量与 A1 对应域部分重合，因此同时报告全量域级 Q 及按 id 去重后的非重叠结果；两者使用冻结的 A1 指标经验 CDF 标尺。
+等权用于主口径；CRITIC 和熵权仅为无监督敏感性对照。监督式 Meta-rater 权重作为后续校准接口保留，当前以两阶段工程逼近处理配对不足。A2/A3 全量与 A1 对应域部分重合，因此同时报告全量域级 Q 及按 id 去重后的非重叠结果；两者使用冻结的 A1 指标经验 CDF 标尺。
 
 ### 域级质量分和区间
 
@@ -540,7 +540,7 @@ A1 的 7 个域中，CRITIC 排名与等权完全一致；熵权和长度加权�
 
 先在每个域内对每个质量组按文档计算经验分位，再定义冲突：至少一个组达到上阈值，且另一个组低于下阈值。报告阈值 (P70,P30)、(P75,P25)、(P80,P20)、(P90,P10) 的逐域冲突率；完整曲线见 `conflict_threshold_sensitivity.csv`。域内标准化避免把域先验错判为文档内冲突。主口径切换为 P90/P10，因为它只保留极端尾部。
 
-综合评价使用定义型惩罚分 $Q_i^*=\\operatorname{{clip}}(Q_i-\\lambda C_i,\\epsilon,1)$，其中 $C_i$ 为五组域内秩相对中位秩的平均绝对偏差归一化值。它只表达评分者对冲突的规范性折减，不是由 Loss 监督拟合的消解器；附件无文档 Q 与配方 Loss 配对，故惩罚是否提升 Loss 预测不可识别，不能称作实证增益。
+综合评价使用工程惩罚分 $Q_i^*=\\operatorname{{clip}}(Q_i-\\rho C_i,\\epsilon,1)$，其中 $C_i$ 为五组域内秩相对中位秩的平均绝对偏差归一化值，主值 rho=0.25，并报告 rho=0/0.1/0.5/1.0 的敏感性。现有资料尚未形成文档 Q 与配方 Loss 的逐条配对，因此该项定位为稳健界定和跨问接口校准，而非监督增益宣称。
 
 扩展集 P75/P25 冲突率：
 
@@ -671,7 +671,11 @@ def run(data_root: Path):
                           "mean_difference_extension_minus_A1": new_scores.mean()-a1_scores.mean()})
     pd.DataFrame(represent).to_csv(OUT / "sampling_representativeness.csv", index=False)
 
-    run_conflict_diagnostics(a_dir, quality, a1_raw, refs, quality_raw_frame, score_quality, OUT)
+    # Main paper口径启用正的冲突惩罚：22项指标先完成组内ECDF，再以
+    # 域内秩离散度形成 C，Q*=clip(Q-rho C)。rho=0.25 为预注册主值，
+    # rho=0/0.1/0.5/1.0 仍保留在敏感性表中。
+    run_conflict_diagnostics(a_dir, quality, a1_raw, refs, quality_raw_frame, score_quality, OUT,
+                             lambda_penalty=0.25)
     pd.read_csv(OUT / "conflict_threshold_by_population.csv").query("dataset == 'A1'").drop(
         columns=["dataset", "conflict_n"]).to_csv(OUT / "conflict_threshold_sensitivity.csv", index=False)
     conflict_plot(OUT / "conflict_threshold_by_population.csv", OUT / "conflict_threshold_curve.png")
@@ -728,7 +732,7 @@ def run(data_root: Path):
     dm_coefficients.to_csv(OUT / "data_mixing_law_coefficients.csv", index=False)
     joint_effects.to_csv(OUT / "mixture_joint_transfer_effects.csv", index=False)
     export_q2_bridge_interface(OUT, data_root, quality, dm_coefficients,
-                               lambda_penalty=0.0, joint_effects=joint_effects)
+                               lambda_penalty=0.25, joint_effects=joint_effects)
     winners = model_compare.loc[model_compare.groupby("loss_domain").cv_rmse.idxmin()].copy()
     winners.to_csv(OUT / "selected_model_by_domain.csv", index=False)
     exponential_alphas = (model_compare.loc[model_compare.model == "data_mixing_exponential"]

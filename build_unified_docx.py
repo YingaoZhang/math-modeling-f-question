@@ -83,6 +83,8 @@ def add_table(doc, frame, digits=4, max_rows=18):
 
 def add_figure(doc, path, caption, width=6.15):
     if not path.exists():
+        path = ROOT / "outputs" / "figures" / path.name
+    if not path.exists():
         return
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -114,11 +116,11 @@ def main():
     subtitle = doc.add_paragraph()
     subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle.add_run("语料质量评分与大模型训练标度律").italic = True
-    paragraph(doc, "本文将问题一的语料质量评分、成分配比建模与问题二的参数规模标度律放在同一数据边界下讨论。核心结论是：质量指标总体同向，极端冲突只占少数；The Pile Loss 与 Pythia val_loss 保持分开；B1 采用无截距标度律，Q_score 按噪声缺陷率进入非对称质量项，配比接口暂作为可识别性明确的下一步模型。")
+    paragraph(doc, "本文将四问的语料质量、成分配比、带不可约损失的标度律、资源配置和能力前沿置于明确的数据口径下讨论。质量维度总体同向；The Pile Loss 与 Pythia val_loss 分开标定；高预算前沿受可行域边界影响。")
 
     doc.add_heading("摘要", 1)
-    paragraph(doc, "第一问以 A1 全局 ECDF 将 22 个质量信号映射到 (0,1]，按教育、可读性、推理、清洁和结构五组等权构造文档质量分 Q，并以 CRITIC、熵权和长度加权作敏感性分析。A1 的逐域独立置换零分布均值为约 55.7%，实测 A1、A2、A3 的域等权 P75/P25 冲突率为 42.6%、53.7%、47.9%，均处于零分布下侧；P90/P10 主口径下 A1 约 9.1%。因此质量维度总体同向，冲突只属少数情形。配比部分闭合到单纯形并用零值乘性替换和 Helmert ILR，13 个 Loss 域独立建模；线性 Ridge、二次交互和指数 Data Mixing Laws 的宏平均 R² 分别为 0.7641、0.8628 和 0.8688，CV 选型宏平均 R² 为 0.8896。")
-    paragraph(doc, "第二问以 B1 的完整 N-D 网格为主，采用 L=A N^-alpha+B D^-beta，先固定 beta=0.2799 再加先验惩罚局部松弛。B6--B8 中 Q_score 与 Loss 同向，故用 L=A N^-alpha+B D^-beta+gamma Q_score^theta，gamma、theta>0；这保证质量提升时损失下降，并在质量趋于完美时退化为经典标度律。跨语料仿射桥接只作为可检验假设，High 层配对仅 7/75 条，当前不可稳定识别。")
+    paragraph(doc, "第一问以 A1 全局 ECDF 将 22 个质量信号全部映射到 (0,1]，按教育、可读性、推理、清洁和结构五组等权构造文档质量分 Q，并以 CRITIC、熵权和长度加权作敏感性分析。A1 的逐域独立置换零分布均值约 55.7%，实测 A1、A2、A3 的域等权 P75/P25 冲突率为 42.6%、53.7%、47.9%，均处于零分布下侧；P90/P10 主口径下 A1 约 9.1%。因此质量维度总体同向，冲突只属少数情形；主接口采用 rho=0.25 的非零惩罚 Q*=clip(Q-rho C)，并保留全套敏感性。配比部分闭合到单纯形并用零值乘性替换和 Helmert ILR，13 个 Loss 域独立建模；线性 Ridge、二次交互和指数 Data Mixing Laws 的宏平均 R² 分别为 0.7641、0.8628 和 0.8688，CV 选型宏平均 R² 为 0.8896。")
+    paragraph(doc, "第二问以 B1 完整 N-D 网格拟合 L=E+A N^-alpha+B D^-beta，得到 E=1.6898、alpha=0.3400、beta=0.2799。B6--B8 的 Q_score 是与 Loss 同向的缺陷率，非对称质量项 gamma Q_score^theta 在质量趋于完美时归零。第三问沿用同一带稳态项的 B1 经典参数，并将跨表质量项完整标注为混合情景；第四问把 C1/C8 主预测与 C3 年度经验参照并列。")
 
     doc.add_heading("1 问题重述与数据边界", 1)
     paragraph(doc, "问题一要求从多维文档质量信号得到域级质量分，识别指标冲突，并解释不同语料配比对 The Pile 验证 Loss 的影响。问题二要求在 Pythia/Cerebras 等 B 表上建立参数量 N、数据量 D 与验证 Loss 的标度关系，并检验质量变量和配比接口的边际意义。A 表 Loss 是 The Pile 验证集交叉熵，B 表 val_loss 是 Pythia 自有验证集，二者不直接混算。A12--A15 是估算数据，A2/A3 含有 A1 的子样本，B9/B10 是超百亿规模情景外推。")
@@ -129,6 +131,7 @@ def main():
         ["p", "17 维配比，闭合后满足 sum p_i=1"],
         ["z(p)", "16 维 Helmert ILR 坐标，零值先乘性替换"],
         ["Q", "A 表文档质量分，严格落在 (0,1]"],
+        ["Q*, rho, C_i", "冲突惩罚后质量分、惩罚强度与文档域内秩冲突严重度"],
         ["Q_score", "B6--B8 原生噪声缺陷率，越大表示缺陷越多"],
         ["N,D", "参数量和训练数据量，单位沿用 B 表"],
         ["L", "逐域验证 Loss；不对 13 个原始 Loss 取算术平均作为因变量"],
@@ -139,11 +142,13 @@ def main():
     paragraph(doc, "每个指标先按 A1 全局 ECDF 映射到 (0,1]，再在五个语义组内取均值，主评分为五组等权均值。CRITIC 权重用于相关性和离差敏感性，熵权只作对照，长度权重只改变文档贡献口径。三套权重的完整结果见 quality_weight_comparison.csv；排序稳定性见 q_domain_rank_stability.csv。")
     add_table(doc, pd.read_csv(Q1 / "conflict_permutation_test.csv"), digits=4, max_rows=5)
     paragraph(doc, "冲突定义为同一域内至少一组位于上尾、另一组位于下尾。置换检验在域内独立打乱五组列，保持每组经验分布和域样本量，重复 1000 次。实测冲突率低于独立基准，支持“各维本质同向、冲突只属少数情形”；因此不再把冲突写成普遍现象。主口径采用 P90/P10，A1 约 9.1%，扩展集分别约 13.8% 和 11.3%。")
+    paragraph(doc, "冲突消解先将全部 22 项指标纳入五个语义组，再对每个文档的组评分做领域内经验秩变换。若某组秩位于 P90 以上而另一组位于 P10 以下，则标记为极端冲突。严重度 C_i 定义为五组域内秩相对该文档中位秩的平均绝对偏差；主评分 Q_i*=clip(Q_i-rho C_i, epsilon, 1)，rho=0.25，epsilon>0。对 rho=0、0.1、0.25、0.5、1 做敏感性，比较原等权、惩罚、门控与组降权口径。惩罚强度属于工程校准：当前无文档质量与配方 Loss 的逐条配对，不能把它写成监督学得的最优值。")
+    add_table(doc, pd.read_csv(Q1 / "conflict_penalty_sensitivity.csv"), digits=4, max_rows=6)
     add_table(doc, pd.read_csv(Q1 / "conflict_p90_p10_summary.csv"), digits=4, max_rows=5)
     add_figure(doc, Q1 / "conflict_threshold_curve.png", "图 1 冲突率的阈值敏感性")
     add_figure(doc, Q1 / "fig_domain_shift_conflict.png", "图 2 语义质量与广告分类器信号的域偏移")
     paragraph(doc, "分类器诊断将 ModernBERT、FineWeb-Edu、Qurater 聚合为 G_model，将结构统计聚合为 G_struct，并以 G_noise=1-ad_en 表示清洁方向。arxiv 与 stackexchange 的高教育/高广告共现是风险证据，支持门控或降权，不足以在没有人工真值时宣称误判率。全部 22 指标直接聚合会显著提高尾部冲突率，说明五组语义聚合是稳健性而非唯一性选择，敏感性表见 conflict_all22_sensitivity.csv。")
-    paragraph(doc, "Qbar(p)=sum_i p_i Q_i* 仅是跨域场景接口。中位数插补把 14 个域的质量设为同一值，导致 Qbar 方差相对只观测域重闭合口径降低 91.4%；因此在论文结论中降级为弱证据。")
+    paragraph(doc, "Qbar(p)=sum_i p_i Q_i* 仅是跨域场景接口。中位数插补把 14 个域的质量设为同一值，导致 Qbar 方差相对只观测域重闭合口径降低 89.5%；因此在论文结论中降级为弱证据。")
     add_table(doc, pd.read_csv(Q1 / "qbar_imputation_variance_loss.csv"), digits=4, max_rows=3)
 
     doc.add_heading("4 第一问 配比与逐域 Loss 模型", 1)
@@ -157,10 +162,10 @@ def main():
     add_figure(doc, Q1 / "fig_est_gamma_coupling.png", "图 5 估算标度指数的耦合与真实对照")
 
     doc.add_heading("5 第二问 经典标度律与物理纠偏", 1)
-    paragraph(doc, "B1 为 8 个 N 乘 147 个 D 的完整无重复解析网格。经典式取消独立截距：L=A N^-alpha+B D^-beta。beta 先固定为 B1 先验 0.2799，再在第二阶段以 lambda=10 的惩罚局部松弛；该流程切断 c 与 A/B 的尺度互相抵消，并报告 beta 的偏离而非虚构额外泛化能力。")
+    paragraph(doc, "B1 为 8 个 N 乘 147 个 D 的完整无重复解析网格。经典式恢复稳态不可约损失 E：L=E+A N^-alpha+B D^-beta；beta 先固定为 B1 先验 0.2799，再在第二阶段以惩罚局部松弛。广义接口写为 L(N,D,Q,p)=E+A N^-alpha+B D^-beta+gamma q_defect^theta+t^T ILR(p)+0.5 ILR(p)^T H ILR(p)，其中配比系数表示相对替代效应。")
     add_table(doc, pd.read_csv(Q2 / "q2_b1_fit_coefficients.csv"), digits=4, max_rows=8)
     add_table(doc, pd.read_csv(Q2 / "q2_scaling_validation_summary.csv"), digits=4, max_rows=8)
-    add_figure(doc, Q2 / "fig_q2_b1_observed_predicted.png", "图 6 B1 观测与无截距标度律预测")
+    add_figure(doc, Q2 / "fig_q2_b1_observed_predicted.png", "图 6 B1 观测与带不可约损失 E 的标度律预测")
     add_figure(doc, Q2 / "fig_q2_b3_trajectory_validation.png", "图 7 B3 轨迹验证")
     paragraph(doc, "B6--B8 的 Q_score 与 Loss 正相关，实测 ∂L/∂Q_score 全部为正。由于 1-Q_score 与 |Q_score-1| 只是保号仿射变换，镜像不能翻转方向。采用非对称缺陷项 L=A N^-alpha+B D^-beta+gamma Q_score^theta，gamma、theta>0，则 ∂L/∂Q_quality<0；Q_quality 趋近 1 时缺陷项趋零，自动退化为经典 N-D 标度律。")
     qtab = pd.read_csv(Q2 / "q2_quality_effect_coefficients.csv")

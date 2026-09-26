@@ -75,8 +75,9 @@ def envelope_plot(annual: pd.DataFrame, forecast: pd.DataFrame, out: Path) -> Pa
     confidence band.
     """
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(annual.Year, annual.p90, "o-", label="Observed p90", color="#2A6F97")
-    ax.plot(annual.Year, annual.maximum, "o-", label="Observed max", color="#C1443E")
+    observed = annual[annual.n.ge(10)].copy()
+    ax.plot(observed.Year, observed.p90, "o-", label="Observed p90 (n≥10)", color="#2A6F97")
+    ax.plot(observed.Year, observed.maximum, "o-", label="Observed max (n≥10)", color="#C1443E")
     for metric, color, label in [("p90", "#2A6F97", "p90 prediction"),
                                  ("maximum", "#C1443E", "max prediction")]:
         f = forecast[forecast.metric.eq(metric)].sort_values("forecast_year")

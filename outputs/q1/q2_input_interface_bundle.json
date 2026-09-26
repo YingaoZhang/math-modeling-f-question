@@ -1,7 +1,7 @@
 {
   "schema_version": "q1-q2-bridge-v1",
   "quality_scale": "A1 ECDF; Q_star in (0,1]; lambda penalty is descriptive unless paired validation is supplied",
-  "conflict_penalty_lambda": 0.0,
+  "conflict_penalty_lambda": 0.25,
   "domain_order": [
     "arxiv",
     "freelaw",
@@ -22,23 +22,23 @@
     "uspto_backgrounds"
   ],
   "Q_star_17": {
-    "arxiv": 0.7323392322933862,
-    "freelaw": 0.5425290965983053,
-    "nih_exporter": 0.5425290965983053,
-    "pubmed_central": 0.5425290965983053,
-    "wikipedia_en": 0.5425290965983053,
-    "dm_mathematics": 0.5425290965983053,
-    "github": 0.4057484555154096,
-    "philpapers": 0.5425290965983053,
-    "stackexchange": 0.5425290965983053,
-    "enron_emails": 0.5425290965983053,
-    "gutenberg_pg_19": 0.5425290965983053,
-    "pile_cc": 0.5425290965983053,
-    "ubuntu_irc": 0.5425290965983053,
-    "europarl": 0.5425290965983053,
-    "hackernews": 0.5425290965983053,
-    "pubmed_abstracts": 0.5425290965983053,
-    "uspto_backgrounds": 0.5425290965983053
+    "arxiv": 0.646776858100917,
+    "freelaw": 0.4524484218959825,
+    "nih_exporter": 0.4524484218959825,
+    "pubmed_central": 0.4524484218959825,
+    "wikipedia_en": 0.4524484218959825,
+    "dm_mathematics": 0.4524484218959825,
+    "github": 0.31878272654800766,
+    "philpapers": 0.4524484218959825,
+    "stackexchange": 0.4524484218959825,
+    "enron_emails": 0.4524484218959825,
+    "gutenberg_pg_19": 0.4524484218959825,
+    "pile_cc": 0.4524484218959825,
+    "ubuntu_irc": 0.4524484218959825,
+    "europarl": 0.4524484218959825,
+    "hackernews": 0.4524484218959825,
+    "pubmed_abstracts": 0.4524484218959825,
+    "uspto_backgrounds": 0.4524484218959825
   },
   "Q_star_status": {
     "arxiv": "observed",
@@ -59,7 +59,7 @@
     "pubmed_abstracts": "median_imputed_no_document_quality",
     "uspto_backgrounds": "median_imputed_no_document_quality"
   },
-  "Q0_train_recipe_mean": 0.5488402103104655,
+  "Q0_train_recipe_mean": 0.4596150318931771,
   "Qbar_imputation_diagnostic": "qbar_imputation_variance_loss.csv",
   "first_order_substitution_vector_t": {
     "arxiv": -0.11019229445025987,

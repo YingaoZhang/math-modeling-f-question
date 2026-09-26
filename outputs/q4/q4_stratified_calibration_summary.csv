@@ -1,0 +1,2 @@
+﻿n_matched,intercept,slope,rmse,benchmark_p05,benchmark_p95,direct_intercept,direct_scale_slope,calibration_method,c8_scale_intercept,c8_scale_slope
+1892,-17.147594730234644,1.1459645695374603,2.018597671636944,4.6543052179884095,40.545775574907324,10.534690670148033,13.747602021988397,C1 direct scale + C8 matched task layer,24.419206856484635,11.783795551637255

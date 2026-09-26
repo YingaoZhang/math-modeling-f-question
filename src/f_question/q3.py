@@ -36,7 +36,7 @@ def _markdown_table(df: pd.DataFrame, columns: list[str] | None = None,
     if max_rows:
         d = d.head(max_rows)
     if d.empty:
-        return "（无记录）"
+        return "当前筛选没有可报告记录；完整结果见对应 CSV。"
     lines = ["| " + " | ".join(map(str, d.columns)) + " |",
              "| " + " | ".join(["---"] * len(d.columns)) + " |"]
     for row in d.itertuples(index=False, name=None):
@@ -99,14 +99,42 @@ def _write_report(out: Path, inputs, results, selected, structural, scale_sensit
     # Keep native B6-B8 results visible as the independent quality-data fit.
     primary = selected[(selected.coefficient_source == "b1") & (selected.boundary_scheme == "expanded")]
     main = primary[primary.cost_function == "exponential"].sort_values("budget_1e21")
+    q_main_min = float(main.Q_target.min()) if not main.empty else float("nan")
+    q_main_max = float(main.Q_target.max()) if not main.empty else float("nan")
     table_main = _markdown_table(main, ["budget_1e21","context_tokens","N_params_B","D_tokens_B","Q_target","loss","train_cost_share","quality_cost_share","attention_cost_share"], 4)
     table_source = _markdown_table(selected[(selected.boundary_scheme == "expanded") & (selected.cost_function == "exponential")], ["coefficient_source","budget_1e21","N_params_B","D_tokens_B","Q_target","loss"], 4)
-    table_sens = _markdown_table(selected[(selected.boundary_scheme == "expanded") & (selected.context_tokens == 2048)], ["coefficient_source","budget_1e21","cost_function","N_params_B","D_tokens_B","Q_target","loss"], 4)
+    table_sens = _markdown_table(selected[(selected.boundary_scheme == "expanded") &
+                                          (np.isclose(selected.budget_1e21, 10.0))],
+                                 ["coefficient_source","budget_1e21","cost_function","context_tokens",
+                                  "N_params_B","D_tokens_B","Q_target","loss"], 4)
     context = results[(results.coefficient_source == "b1") & (results.boundary_scheme == "expanded") & (results.cost_function == "exponential") & (np.isclose(results.budget_1e21,10.0))].sort_values("context_tokens")
+    context_choices = ", ".join(str(int(v)) for v in main.context_tokens.tolist())
+    n_contexts = int(main.context_tokens.nunique())
     scale_table = _markdown_table(scale_sensitivity, ["quality_cost_scale","Q_target","N_params_B","D_tokens_B","quality_cost_share","loss"], 4)
     mix_table = _markdown_table(mix_sens[(mix_sens.mix_effect_scale == MIX_EFFECT_SCALE) & (mix_sens.mix_kl_penalty == MIX_KL_PENALTY)].sort_values("share_multiple", ascending=False), ["domain","p0","share","share_multiple"], 4, 17)
     expanded_table = _markdown_table(expanded[expanded.cost_function == "exponential"], ["coefficient_source","budget_1e21","N_params_B","D_tokens_B","Q_target","loss"], 4)
-    uncertainty_table = _markdown_table(uncertainty, ["coefficient_source","budget_1e21","N_params_B_median","N_params_B_ci_low","N_params_B_ci_high","D_tokens_B_median","D_tokens_B_ci_low","D_tokens_B_ci_high","Q_target_median","Q_target_ci_low","Q_target_ci_high","train_cost_share_median","quality_cost_share_median","attention_cost_share_median"], 4)
+    primary_uncertainty = uncertainty[uncertainty.coefficient_source == "b1"]
+    def interval_label(row: pd.Series, name: str) -> str:
+        return (f"{row[f'{name}_median']:.3f} "
+                f"[{row[f'{name}_ci_low']:.3f}, {row[f'{name}_ci_high']:.3f}]")
+    uncertainty_display = pd.DataFrame({
+        "预算 (1e21 FLOPs)": primary_uncertainty.budget_1e21,
+        "N (B), 中位数 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "N_params_B"), axis=1),
+        "D (B token), 中位数 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "D_tokens_B"), axis=1),
+        "Q, 中位数 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "Q_target"), axis=1),
+    })
+    cost_share_display = pd.DataFrame({
+        "预算 (1e21 FLOPs)": primary_uncertainty.budget_1e21,
+        "训练份额 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "train_cost_share"), axis=1),
+        "质量份额 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "quality_cost_share"), axis=1),
+        "注意力份额 [95%区间]": primary_uncertainty.apply(lambda row: interval_label(row, "attention_cost_share"), axis=1),
+    })
+    uncertainty_table = _markdown_table(uncertainty_display, digits=4)
+    cost_share_table = _markdown_table(cost_share_display, digits=4)
+    structural_primary = structural[(structural.coefficient_source == "b1") &
+                                    (structural.boundary_scheme == "expanded") &
+                                    (structural.cost_function == "exponential")]
+    structural_table = _markdown_table(structural_primary, ["budget_from_1e21","budget_to_1e21","delta_N_B","delta_D_B","delta_Q","delta_train_share","delta_quality_share","loss_drop"], 4)
     eta_table = _markdown_table(eta_sens, ["eta","critical_context_tokens"], 4)
     second_table = _markdown_table(second, [c for c in ["loss_domain","domain_a","domain_b","donor_domain","nonadditive_delta_loss"] if c in second.columns], 4)
     param_df = pd.DataFrame([{"coefficient_source": s, "parameter_group": k, "value": v} for s in SOURCES for k, v in {**inputs.classic_by_source[s], **inputs.quality_by_source[s]}.items()])
@@ -114,29 +142,29 @@ def _write_report(out: Path, inputs, results, selected, structural, scale_sensit
 
 ## 摘要
 
-本问在问题一的领域质量接口和问题二的标度律基础上，联合优化参数量 N、训练数据量 D、质量目标 Q 与 17 域配比 p。为满足 Q4 与 C6 的 Loss 尺度契约，对外主情景采用 B1 的 Pythia 经典项 (A,B,α,β) 与 B6–B8 λ=10 的质量项 (γ,θ) 组成的混合口径；它不是单一数据集上的联合估计。B6–B8 原生口径仍作为独立质量数据敏感性结果完整保留。预算覆盖 10^19--10^27 FLOPs，连续 `Loss*(C)` 仅是预算网格上的对数分段插值。Q1 的 17 域 Q 有 14 个中位数插补，Qbar 的方差相对仅观测域重闭合口径损失 91.4%，故质量—配比部分是弱证据。主情景中 Q 达到 0.95 上界，质量维度的内点权衡不可识别；部分高预算情景触及 N 上界时，只能解释为情景边界与成本函数的共同结果。
+本问在问题一的领域质量接口和问题二的标度律基础上，联合优化参数量 N、训练数据量 D、质量目标 Q 与 17 域配比 p。为满足 Q4 与 C6 的 Loss 尺度契约，对外主情景采用 B1 的 Pythia 经典项 (E,A,B,α,β) 与 B6–B8 λ=10 的质量项 (γ,θ) 组成的混合口径；它不是单一数据集上的联合估计。B6–B8 原生口径仍作为独立质量数据敏感性结果完整保留。预算覆盖 10^19--10^27 FLOPs，连续 `Loss*(C)` 仅是预算网格上的对数分段插值。Q1 的 17 域 Q 有 14 个中位数插补，Qbar 的方差相对仅观测域重闭合口径损失 89.5%，故质量—配比部分采用区间传播。主口径的 Q 由 {q_main_min:.3f} 到 {q_main_max:.3f}，质量成本已形成内点与边界并存的两阶段工程逼近；部分高预算情景触及 N 上界时，解释为情景边界与成本函数的共同结果。
 
 ## 1 问题重述与数据边界
 
-目标是在算力预算 C 下配置 N、D、Q 和 p，使代理验证损失最小。预算覆盖 10^19、10^22、10^24、10^25、10^26、10^27 FLOPs，Lctx 采用 C7 的离散支持值。Q1 的 Qbar 插补方差损失为 91.4%，Qbar(p) 只作为弱证据。B1 与 B6–B8 的数据口径不同，因此不将单个系数拆开互换；供 Q4 使用的完整混合情景明确记录为 B1 经典项与 B6–B8 质量项的跨数据源组合。
+目标是在算力预算 C 下配置 N、D、Q 和 p，使代理验证损失最小。预算覆盖 10^19、10^22、10^24、10^25、10^26、10^27 FLOPs，Lctx 采用 C7 的离散支持值。Q1 的 Qbar 插补方差损失为 89.5%，Qbar(p) 只作为弱证据。B1 与 B6–B8 的数据口径不同，因此不将单个系数拆开互换；供 Q4 使用的完整混合情景明确记录为 B1 经典项与 B6–B8 质量项的跨数据源组合。
 
 {_markdown_table(param_df, ["coefficient_source","parameter_group","value"], 4)}
 
-主情景使用 expanded: N∈[0.07,5000]、D∈[0.134,4000]；legacy 对照为 N∈[0.07,1000]、D∈[0.134,5000]。边界是用于控制外推范围的情景设定，不是题目给定或物理可达上限。Q4 前沿从 expanded 情景构造，以覆盖 10^27 FLOPs；超过已观测规模的部分仍是模型外推。
+主情景使用 expanded: N∈[0.07,5000]、D∈[0.134,4000]；legacy 对照为 N∈[0.07,1000]、D∈[0.134,5000]。边界是用于控制外推范围的情景设定，不是题目给定或物理可达上限。Q4 前沿从 expanded 情景构造，以覆盖 10^27 FLOPs；超过已观测规模的部分仍是模型外推。第三问统一沿用问题二 B1 的带稳态项经典参数（E、A、B、α、β），与早期无稳态项试算口径分开。
 
 ## 2 符号与模型
 
-N、D 分别以十亿参数和十亿 Token 计，p_i≥0.001 且 Σp_i=1，Q0≤Q≤0.95。配比采用带下界的 softmax 参数化，保证每个领域有最小代表量。
+N、D 分别以十亿参数和十亿 Token 计，p_i≥0.001 且 Σp_i=1，Q0≤Q≤0.99。配比采用带下界的 softmax 参数化，保证每个领域有最小代表量。
 
-$$C_{{train}}=0.006ND,\qquad C_{{attn}}=C_{{train}}\\frac{{ηL_{{ctx}}}}{{6}},\qquad C_Q=10^{{-12}}D[g(Q)-g(Q_0)]_+.$$ 
+$$C_{{train}}=0.006ND,\qquad C_{{attn}}=C_{{train}}\\frac{{ηL_{{ctx}}}}{{6}},\qquad C_Q=κ_Q D\,\\frac{{[g(Q)-g(Q_0)]_+}}{{g(1)-g(Q_0)}}.$$ 
 
-$$L=A N^{{-α}}+B D^{{-β}}+γ(1-Q_{{eff}})^θ+0.08t^T(p-p_0)+0.03\sum_i p_i\ln(p_i/p_{{0i}}).$$
+$$L=E+A N^{{-α}}+B D^{{-β}}+γ(1-Q_{{eff}})^θ+0.08t^T(p-p_0)+0.03\sum_i p_i\ln(p_i/p_{{0i}}).$$
 
 Q_eff=1-(1-Q)Q0/Q̄(p)，Q̄(p)=Σp_iQ_i^*。p 项系相对替代效应：提高一个领域意味着从其他领域挪出相同比例。二阶表只报告独立测试二次模型的预测非加性差分，不解释为因果协同。
 
 ## 3 两套参数口径
 
-Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 A=2.0824、B=1.2552、α=0.0661、β=0.2762；质量项为 B6–B8 λ=10 的 γ=1.5165、θ=1.0868。该组参数须整体读取并标注为混合口径，不应解释为同一数据集联合估计。B6–B8 原生六参数 A=0.8111、B=0.5641、α=0.2334、β=0.2625、γ=1.5165、θ=1.0868 单独保留作质量实验口径对照。γ、θ 在 λ=0 至 10 的变动小于 0.02% 和 0.04%，但此稳定性不能消除跨数据源不确定性。每套口径均完整运行六档预算、三种质量成本和五个上下文情景。
+Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 E={inputs.classic_by_source['b1']['E']:.4f}、A={inputs.classic_by_source['b1']['A']:.4f}、B={inputs.classic_by_source['b1']['B']:.4f}、α={inputs.classic_by_source['b1']['alpha']:.4f}、β={inputs.classic_by_source['b1']['beta']:.4f}；质量项为 B6–B8 λ=10 的 γ={inputs.quality_by_source['b1']['gamma']:.4f}、θ={inputs.quality_by_source['b1']['theta']:.4f}。经典项来自同一组联合估计；质量项的跨表接入明确标为混合口径，不解释为单一数据集的联合拟合。B6–B8 原生参数整体保留作质量实验口径对照。每套口径均完整运行六档预算、三种质量成本和可用上下文情景。
 
 {table_source}
 
@@ -152,7 +180,7 @@ Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 A=2.0824、B=1.2552�
 
 ![预算损失 Pareto](fig_q3_budget_loss_pareto.png)
 
-Q 在六档预算均为 0.95，主模型没有识别到质量内点。低预算质量成本占比较高；部分高预算情景触及 5000B 上界，必须解释为边界设定加成本函数结构效应，而非架构规律。expanded 边界放宽结果见 4.4。
+Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预算质量成本占比上升、高预算逐步转向训练与注意力成本；部分高预算情景触及 5000B 上界，解释为边界设定加成本函数结构效应，而非架构规律。expanded 边界放宽结果见 4.4。
 
 ### 4.2 质量成本与参数口径敏感性
 
@@ -166,7 +194,7 @@ Q 在六档预算均为 0.95，主模型没有识别到质量内点。低预算�
 
 {_markdown_table(context, ["context_tokens","N_params_B","D_tokens_B","Q_target","loss","attention_cost_share"], 4)}
 
-由模型定义式 Lctx^crit=6/η，题设给定 η=2×10^-4 时得到 30000。η 敏感性为：
+由模型定义式 Lctx^crit=6/η，采用自设情景系数 η=2×10^-4 时得到 30000；该数值并非题目给定。η 敏感性为：
 
 {eta_table}
 
@@ -174,7 +202,7 @@ Q 在六档预算均为 0.95，主模型没有识别到质量内点。低预算�
 
 ![eta 敏感性](fig_q3_eta_sensitivity.png)
 
-9 个预算与成本条件的选择均落在 2048，是代理损失缺少长文本收益项导致的最短上下文边界解，不能推广为真实训练中 2048 普遍最优。
+主口径六档预算选出的上下文依次为 {context_choices}，共覆盖 {n_contexts} 种长度。代理模型同时计入注意力成本和饱和式长文本收益；这些结果仅表征当前收益系数和预算约束下的选择，不代表真实训练的通用最优上下文。
 
 ### 4.4 边界放宽与结构转移
 
@@ -182,7 +210,7 @@ Q 在六档预算均为 0.95，主模型没有识别到质量内点。低预算�
 
 放宽到 N≤5000、D≤4000 后，高预算解若仍贴近 N 上界，则只能说明边界依赖；若回到内点，才可把旧边界激活视为数值约束影响。成本份额的跨预算转移如下：
 
-{_markdown_table(structural, digits=4)}
+{structural_table}
 
 ![预算结构转移](fig_q3_structural_transfer.png)
 
@@ -206,9 +234,13 @@ Q 在六档预算均为 0.95，主模型没有识别到质量内点。低预算�
 
 ### 4.7 参数不确定性传播
 
-对六参数至少 200 次抽样，传播到 N、D、Q 与三类成本份额；区间采用 2.5%--97.5% 分位数。
+对 B1 经典项和 B6–B8 质量项的七个参数各做 200 次区间抽样，传播到 N、D、Q 与三类成本份额；区间采用 2.5%--97.5% 分位数。这里固定基线配比和主情景选出的上下文，因此区间是条件性参数敏感性范围，并非联合实验 bootstrap。
 
 {uncertainty_table}
+
+三类成本份额的条件区间如下，另一系数口径及全部抽样见 `q3_uncertainty_intervals.csv` 和 `q3_uncertainty_samples.csv`。
+
+{cost_share_table}
 
 ![不确定性区间](fig_q3_uncertainty_bands.png)
 
@@ -234,7 +266,7 @@ Q1 插补误差、Q2 口径桥接误差和硬件吞吐尚未由同一联合实�
 
 ## 7 结论
 
-主口径重算后，Q 恒卡在 0.95，质量维度的内点权衡不可识别；部分高预算情景的 N 上界激活是边界设定和成本结构的共同结果。长上下文使注意力开销按 ηLctx/6 放大，参数规模受到更强挤压，代理模型倾向优先保数据吞吐。在本代理模型和题设成本函数条件下，得到的规律性结论是：长上下文算力挤压具有非对称性，参数规模相对更易被压缩；该判断需用长文本训练计时和收益项补充实验验证，不能作为脱离校准条件的工程定律。
+主口径重算后，Q 在 {q_main_min:.3f}–{q_main_max:.3f} 之间，出现内点与上界并存的质量权衡；部分高预算情景的 N 上界激活是边界设定和成本结构的共同结果。长上下文使注意力开销按 ηLctx/6 放大，参数规模受到更强挤压，代理模型倾向优先保数据吞吐。在本代理模型和成本函数条件下，得到的规律性结论是：长上下文算力挤压具有非对称性，参数规模相对更易被压缩；该判断需用长文本训练计时和收益项补充实验验证。
 
 ## 参考文献
 
@@ -251,6 +283,21 @@ Q1 插补误差、Q2 口径桥接误差和硬件吞吐尚未由同一联合实�
     path = out / "第三问完整论文.md"
     path.write_text(report, encoding="utf-8")
     return path
+
+
+def rebuild_report_from_outputs(root: Path) -> Path:
+    """Rebuild the Q3 manuscript from saved tables without rerunning optimization."""
+    out = root / "outputs" / "q3"
+    inputs = load_q3_inputs(root)
+    names = (
+        "q3_optimization_all_scenarios", "q3_selected_by_budget_and_cost",
+        "q3_structural_transfer", "q3_cost_scale_sensitivity",
+        "q3_coefficient_source_summary", "q3_expanded_bounds_results",
+        "q3_uncertainty_intervals", "q3_mix_weight_sensitivity",
+        "q3_eta_sensitivity", "q3_second_order_representative",
+    )
+    frames = [pd.read_csv(out / f"{name}.csv") for name in names]
+    return _write_report(out, inputs, *frames)
 
 
 def main() -> None:
@@ -294,7 +341,7 @@ def main() -> None:
         logx = np.log10(frontier_source.budget_1e21.to_numpy(float))
         curve = pd.DataFrame({"budget_1e21": grid, "budget_flops": grid * 1e21,
                               "coefficient_source": "b1_mixed_pythia_quality",
-                              "context_tokens": 2048, "cost_function": "exponential",
+                              "context_tokens": np.rint(np.interp(np.log10(grid), logx, frontier_source.context_tokens.to_numpy(float))).astype(int), "cost_function": "exponential",
                               "frontier_method": "piecewise_log_interpolation_of_optimized_grid"})
         for col in ["loss", "N_params_B", "D_tokens_B", "Q_target", "train_cost_share",
                     "quality_cost_share", "attention_cost_share"]:
@@ -322,7 +369,7 @@ def main() -> None:
             "c8_json_policy": "C8 detailed JSON excluded; CSV summaries only",
             "bridge_high_n": 7,
             "bridge_policy": "High only for calibration; Medium only for ranking validation",
-            "large_scale_bias_note": "B9/B10 are estimated scenarios, not experiments; the no-intercept model underpredicts by a mean 0.3109 nats. This is a diagnostic interval, not a verified physical correction.",
+            "large_scale_bias_note": "B9/B10 are estimated scenarios, not experiments; their residual interval diagnoses estimated-table fit and is not an independent physical correction.",
             "large_scale_bias": {
                 "n_estimated_rows": int(q2_metrics["n"]),
                 "mean_residual_nats": float(q2_residuals.mean()),
@@ -331,7 +378,7 @@ def main() -> None:
                 "mae_before_nats": float(q2_metrics["mae"]),
                 "status": "estimated-table residuals only; not independent experimental validation"
             },
-            "q1_qbar_variance_loss_fraction": 0.9143158416959638,
+            "q1_qbar_variance_loss_fraction": 0.894987042497907,
             "q4_loss_calibration_policy": "C6 High Pythia rows only (n=7/75); Medium rows are ranking checks only"
         }
         (root / "outputs" / "q4_input_contract.json").write_text(json.dumps(contract, ensure_ascii=False, indent=2), encoding="utf-8")

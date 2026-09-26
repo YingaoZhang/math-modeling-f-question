@@ -1,8 +1,8 @@
 """Parameter uncertainty propagation for the Question 3 scenario model.
 
-The propagation is deliberately separated from the main grid: it fixes the
-exponential cost and the shortest C7 context so that intervals describe
-coefficient uncertainty rather than a mixture of scenario choices.
+The propagation fixes the exponential cost, baseline mixture and the context
+selected by the main scenario at each budget. Intervals are conditional on
+these choices and describe coefficient uncertainty only.
 """
 
 from __future__ import annotations
@@ -15,8 +15,11 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
-from .q3_data import Q3Inputs
-from .q3_models import COST_FUNCTIONS, compute_costs, predicted_loss
+from .q3_data import Q3Inputs, with_source
+from .q3_models import COST_FUNCTIONS, Q_UPPER, compute_costs, predicted_loss
+
+plt.rcParams.update({"font.sans-serif": ["Microsoft YaHei", "SimHei", "DejaVu Sans"],
+                     "axes.unicode_minus": False})
 
 
 def _intervals(root: Path, inputs: Q3Inputs, source: str) -> dict[str, tuple[float, float]]:
@@ -48,16 +51,23 @@ def run_uncertainty(root: Path, inputs: Q3Inputs, out: Path,
     """Draw paired six-parameter sets and propagate them to allocations."""
     rng = np.random.default_rng(seed)
     rows = []
+    selected = pd.read_csv(out / "q3_selected_by_budget_and_cost.csv")
+    selected = selected[(selected.boundary_scheme == "expanded") &
+                        (selected.cost_function == "exponential")]
+    contexts = {(str(row.coefficient_source), float(row.budget_1e21)): int(row.context_tokens)
+                for row in selected.itertuples()}
     for source in ["b6_b8_lambda10", "b1"]:
-        bounds = _intervals(root, inputs, source)
+        base = with_source(inputs, source, (0.07, 5000.0), (0.134, 4000.0))
+        bounds = _intervals(root, base, source)
         for draw in range(int(n_draws)):
-            classic = {k: float(max(1e-8, rng.uniform(*bounds[k]))) for k in inputs.classic_by_source[source]}
-            quality = {k: float(max(1e-8, rng.uniform(*bounds[k]))) for k in inputs.quality_by_source[source]}
-            local = replace(inputs, classic=classic, quality=quality)
+            classic = {k: float(max(1e-8, rng.uniform(*bounds[k]))) for k in base.classic_by_source[source]}
+            quality = {k: float(max(1e-8, rng.uniform(*bounds[k]))) for k in base.quality_by_source[source]}
+            local = replace(base, classic=classic, quality=quality)
             for budget in budgets:
-                solved = _fixed_mix_solve(local, budget, int(min(inputs.context_values)), inputs.p0)
+                context = contexts.get((source, budget), int(min(inputs.context_values)))
+                solved = _fixed_mix_solve(local, budget, context, inputs.p0)
                 solved.update({"coefficient_source": source, "bootstrap_draw": draw,
-                               "context_tokens_fixed": int(min(inputs.context_values))})
+                               "context_tokens_fixed": context})
                 rows.append(solved)
     samples = pd.DataFrame(rows)
     value_cols = ["N_params_B", "D_tokens_B", "Q_target", "train_cost_share",
@@ -92,9 +102,9 @@ def _fixed_mix_solve(inputs: Q3Inputs, budget: float, context: int, p: np.ndarra
     def feasible(x):
         n, d, q = decode(x)
         return budget - compute_costs(n, d, q, context, fn, inputs.q0)["total_cost_1e21"]
-    x0 = np.array([np.log(np.sqrt(n_lo*n_hi)), np.log(np.sqrt(d_lo*d_hi)), min(.9, .5*(inputs.q0+.95))])
+    x0 = np.array([np.log(np.sqrt(n_lo*n_hi)), np.log(np.sqrt(d_lo*d_hi)), .5*(inputs.q0+Q_UPPER)])
     res = minimize(obj, x0, method="SLSQP",
-                   bounds=[(np.log(n_lo), np.log(n_hi)), (np.log(d_lo), np.log(d_hi)), (inputs.q0, .95)],
+                   bounds=[(np.log(n_lo), np.log(n_hi)), (np.log(d_lo), np.log(d_hi)), (inputs.q0, Q_UPPER)],
                    constraints=[{"type": "ineq", "fun": feasible}],
                    options={"maxiter": 160, "ftol": 1e-9, "disp": False})
     n, d, q = decode(res.x)

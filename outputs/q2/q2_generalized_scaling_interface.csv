@@ -1,0 +1,5 @@
+﻿term,formula,source,identification_status
+scale,E + A*N^(-alpha) + B*D^(-beta),B1,estimated
+quality,gamma*q_defect^theta,B6-B8,conditional calibration
+mix_first_order,t_ILR^T z(p),Q1 quadratic model,model-conditional
+mix_second_order,0.5*z(p)^T H z(p),Q1 quadratic model,model-conditional nonadditivity

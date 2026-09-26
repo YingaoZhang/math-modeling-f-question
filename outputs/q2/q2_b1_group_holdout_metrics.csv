@@ -1,2 +1,2 @@
 holdout_scheme,r2,mae,rmse,n,note
-"group_by_(N,D)",0.9819351321568368,0.04145944306037922,0.04597508854552108,1176,reported deterministic grid diagnostic; no random external data
+"group_by_(N,D)",0.9999998160767536,0.0001054790577467973,0.00014669776321394698,1176,reported deterministic grid diagnostic; no random external data

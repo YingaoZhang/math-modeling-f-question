@@ -1,8 +1,8 @@
 """Data loaders and audit rules for Question 4.
 
-Question 4 deliberately consumes the compact CSV attachments and the explicit
-Q3 frontier contract.  The large C8 JSON directory is audited for integrity
-but never used as a modelling input.
+Question 4 consumes the compact CSV attachments, the explicit Q3 frontier
+contract, and the valid C8 JSON task results. Malformed JSON files remain in
+the audit manifest and are excluded from all modelling.
 """
 
 from __future__ import annotations
@@ -38,15 +38,14 @@ def read_csv(path: Path) -> pd.DataFrame:
 def audit_c8_json(root: Path) -> pd.DataFrame:
     """Return the exclusion manifest for all C8 JSON files.
 
-    Parsing failures are recorded as exclusions.  Even valid files remain
-    excluded because C8 is high-volume task-level detail outside the Q4 CSV
-    contract; this keeps the analysis reproducible and avoids silently mixing
-    heterogeneous schemas.
+    Parsing failures are recorded as exclusions. Valid files are marked for
+    task-level aggregation; the manifest is retained so the data boundary is
+    reproducible and malformed files cannot enter the model silently.
     """
     folder = root / "data" / "raw" / "real_attachments" / "C_efficiency_evolution" / "detailed_results"
     rows: list[dict[str, Any]] = []
     for path in sorted(folder.rglob("*.json")):
-        status, error = "valid_excluded_by_policy", "C8 JSON excluded; CSV summaries are the modelling input"
+        status, error = "valid_for_aggregation", "valid C8 JSON parsed; included in official task aggregation"
         try:
             json.loads(path.read_text(encoding="utf-8"))
         except Exception as exc:  # malformed files are useful audit evidence

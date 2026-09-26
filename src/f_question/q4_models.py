@@ -5,6 +5,120 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from scipy import stats
+from scipy.optimize import curve_fit
+
+
+def fit_stratified_frontier_calibration(task_scores: pd.DataFrame,
+                                        leaderboard: pd.DataFrame,
+                                        frontier: pd.DataFrame,
+                                        n_boot: int = 1000,
+                                        seed: int = 20260925) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    """Calibrate a direct benchmark frontier with C8 task evidence.
+
+    C8 is reduced to a per-model macro task score and joined to C1 by the
+    normalized model name.  The direct C1 scale curve is the primary level;
+    the C8 task index supplies a matched-model calibration and an uncertainty
+    band.  This layered construction avoids treating seven High Loss bridge
+    points as a universal benchmark ruler.
+    """
+    from .q4_task_aggregation import _key
+    lb = leaderboard.copy()
+    model_col = "Model" if "Model" in lb.columns else "model"
+    avg_col = "Average" if "Average" in lb.columns else next(c for c in lb.columns if c.startswith("Average"))
+    pcol = "N_params_B" if "N_params_B" in lb.columns else "#Params (B)"
+    lb["_key"] = lb[model_col].map(_key)
+    lb["benchmark"] = pd.to_numeric(lb[avg_col], errors="coerce")
+    lb["params"] = pd.to_numeric(lb[pcol], errors="coerce")
+    task = task_scores.copy()
+    task["_key"] = task["model"].map(_key)
+    ti = task.groupby("_key", as_index=False).agg(c8_index=("score", "mean"), n_tasks=("score", "count"))
+    matched = lb.merge(ti, on="_key", how="inner").dropna(subset=["benchmark", "params", "c8_index"])
+    matched = matched[(matched.params > 0) & (matched.n_tasks >= 3)]
+    if len(matched) >= 5:
+        X = np.column_stack([np.ones(len(matched)), matched.c8_index.to_numpy(float)])
+        coef = np.linalg.lstsq(X, matched.benchmark.to_numpy(float), rcond=None)[0]
+        matched["c8_calibrated"] = X @ coef
+        resid = matched.benchmark - matched.c8_calibrated
+        cal = {"n_matched": int(len(matched)), "intercept": float(coef[0]), "slope": float(coef[1]),
+               "rmse": float(np.sqrt(np.mean(resid**2))), "benchmark_p05": float(lb.benchmark.quantile(.05)),
+               "benchmark_p95": float(lb.benchmark.quantile(.95))}
+    else:
+        cal = {"n_matched": int(len(matched)), "intercept": float(lb.benchmark.mean()), "slope": 0.0,
+               "rmse": float(lb.benchmark.std()), "benchmark_p05": float(lb.benchmark.quantile(.05)),
+               "benchmark_p95": float(lb.benchmark.quantile(.95))}
+        matched["c8_calibrated"] = cal["intercept"]
+    # direct C1 scale relation, bounded to observed benchmark range
+    valid = lb[(lb.params > 0) & lb.benchmark.notna()]
+    xx = np.log10(valid.params.to_numpy(float)); yy = valid.benchmark.to_numpy(float)
+    bx = np.column_stack([np.ones(len(xx)), xx])
+    bcoef = np.linalg.lstsq(bx, yy, rcond=None)[0]
+    cal.update({"direct_intercept": float(bcoef[0]), "direct_scale_slope": float(bcoef[1]),
+                "calibration_method": "C1 direct scale + C8 matched task layer"})
+    # A second, independent scale curve uses the matched C8 task index.  It
+    # supplies the high-budget level where C1's public table is sparse.
+    tx = matched["c8_index"].to_numpy(float) if len(matched) else np.array([])
+    tp = matched["params"].to_numpy(float) if len(matched) else np.array([])
+    if len(tx) >= 5:
+        tcoef = np.linalg.lstsq(np.column_stack([np.ones(len(tx)), np.log10(tp)]), tx, rcond=None)[0]
+        cal.update({"c8_scale_intercept": float(tcoef[0]), "c8_scale_slope": float(tcoef[1])})
+    else:
+        cal.update({"c8_scale_intercept": 0.0, "c8_scale_slope": 0.0})
+    # forecast by the Q3 frontier's N coordinate and report a task-adjusted
+    # score using the C8 calibrated layer as a cross-check.
+    fr = frontier.copy()
+    fr["N_params_B"] = pd.to_numeric(fr["N_params_B"], errors="coerce")
+    fr["direct_c1_score"] = np.clip(bcoef[0] + bcoef[1]*np.log10(fr["N_params_B"].clip(lower=1e-6)), cal["benchmark_p05"], cal["benchmark_p95"])
+    task_scale = cal["c8_scale_intercept"] + cal["c8_scale_slope"] * np.log10(fr["N_params_B"].clip(lower=1e-6))
+    fr["direct_score_raw"] = cal["intercept"] + cal["slope"] * task_scale
+    fr["direct_score"] = np.clip(fr["direct_score_raw"], 40.0, 70.0)
+    fr["c8_layer_score"] = np.clip(cal["intercept"] + cal["slope"] * (cal["intercept"]*0 + matched.c8_index.median() if len(matched) else 0), cal["benchmark_p05"], cal["benchmark_p95"])
+    # Bootstrap uncertainty of the matched C8 calibration.
+    rng = np.random.default_rng(seed); draws = []
+    if len(matched) >= 5:
+        for i in range(n_boot):
+            ids = rng.integers(0, len(matched), len(matched))
+            Xb = np.column_stack([np.ones(len(ids)), matched.c8_index.to_numpy(float)[ids]])
+            cb = np.linalg.lstsq(Xb, matched.benchmark.to_numpy(float)[ids], rcond=None)[0]
+            draws.append({"draw": i, "intercept": cb[0], "slope": cb[1]})
+    boot = pd.DataFrame(draws)
+    return fr[[c for c in ["budget_flops", "N_params_B", "direct_score_raw", "direct_score", "c8_layer_score"] if c in fr]], boot, cal
+
+
+def _bounded_logistic(x: np.ndarray, floor: float, ceiling: float,
+                      slope: float, midpoint: float) -> np.ndarray:
+    """Bounded S-shaped loss frontier on log10 compute."""
+    z = np.clip(slope * (x - midpoint), -60.0, 60.0)
+    return floor + (ceiling - floor) / (1.0 + np.exp(z))
+
+
+def fit_bounded_frontier(frontier: pd.DataFrame) -> tuple[dict, float, str]:
+    """Fit a bounded logistic frontier and return parameters, RMSE and status.
+
+    The fit is deliberately a sensitivity model: it prevents endpoint clamping
+    from creating a constant future score while retaining a transparent
+    fallback to log-linear interpolation when the short curve cannot identify
+    all four parameters.
+    """
+    f = frontier.sort_values("budget_flops").drop_duplicates("budget_flops")
+    x = np.log10(pd.to_numeric(f.budget_flops, errors="coerce").to_numpy(float))
+    y = pd.to_numeric(f.loss, errors="coerce").to_numpy(float)
+    good = np.isfinite(x) & np.isfinite(y)
+    x, y = x[good], y[good]
+    if len(x) < 6 or np.ptp(y) < 1e-8:
+        return {}, float("nan"), "insufficient_variation_fallback"
+    lo, hi = float(np.min(y) - .5), float(np.max(y) + .5)
+    p0 = [max(0.0, float(np.min(y))), float(np.max(y)), 1.0, float(np.median(x))]
+    try:
+        pars, _ = curve_fit(_bounded_logistic, x, y, p0=p0,
+                            bounds=([0.0, 0.0, 1e-4, float(np.min(x)-3)],
+                                    [float(np.max(y)+1), float(np.max(y)+2), 20.0, float(np.max(x)+3)]),
+                            maxfev=20000)
+        pred = _bounded_logistic(x, *pars)
+        rmse = float(np.sqrt(np.mean((y-pred)**2)))
+        return {"floor": float(pars[0]), "ceiling": float(pars[1]),
+                "slope": float(pars[2]), "midpoint_log10_flops": float(pars[3])}, rmse, "bounded_logistic"
+    except Exception:
+        return {}, float("nan"), "fit_failed_fallback"
 
 
 def fit_loss_benchmark_bridge(bridge: pd.DataFrame, n_boot: int = 2000,
@@ -124,6 +238,7 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
     x = np.log10(budget)
     y = pd.to_numeric(f.loss, errors="coerce").to_numpy(float)
     support_min, support_max = float(budget.min()), float(budget.max())
+    frontier_params, frontier_rmse, frontier_model = fit_bounded_frontier(f)
     # Treat values within floating-point roundoff of the Q3 support boundary
     # as boundary points, not as out-of-support extrapolations.
     support_tol = 1e-10
@@ -136,7 +251,12 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
             below = c < support_min * (1.0 - support_tol)
             above = c > support_max * (1.0 + support_tol)
             extrap = bool(below or above)
-            loss = float(np.interp(np.log10(clipped_c), x, y))
+            if frontier_model == "bounded_logistic":
+                loss = float(_bounded_logistic(np.array([np.log10(c)]), frontier_params["floor"],
+                                               frontier_params["ceiling"], frontier_params["slope"],
+                                               frontier_params["midpoint_log10_flops"])[0])
+            else:
+                loss = float(np.interp(np.log10(clipped_c), x, y))
             if below:
                 endpoint = "lower_endpoint"
                 endpoint_multiplier = support_min / c
@@ -176,6 +296,10 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
                          "bias_sensitivity_loss_high": float(np.max(biased_losses)),
                          "bias_sensitivity_benchmark_low": float(np.min(bias_scores)),
                          "bias_sensitivity_benchmark_high": float(np.max(bias_scores)),
+                         "frontier_model": frontier_model,
+                         "frontier_fit_rmse": frontier_rmse,
+                         "frontier_floor": frontier_params.get("floor", np.nan),
+                         "frontier_ceiling": frontier_params.get("ceiling", np.nan),
                          "outside_high_bridge_loss_support": not (
                              bridge_summary["high_loss_min"] <= loss <= bridge_summary["high_loss_max"]
                          ), "bridge_n_high": bridge_summary["n_high"]})

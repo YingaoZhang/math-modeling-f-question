@@ -120,7 +120,11 @@ def mrtS_table(classic: ClassicFit, quality_params: np.ndarray,
         for d in d_values:
             frame = pd.DataFrame({"N_params_B": [n], "D_tokens_B": [d], "Q_score": [1-q_quality]})
             L = float(asymmetric_quality_prediction(frame, p)[0])
-            A, B, gamma, alpha, beta, theta = p
+            if len(p) >= 7:
+                E, A, B, gamma, alpha, beta, theta = p[:7]
+            else:
+                E = 0.0
+                A, B, gamma, alpha, beta, theta = p[:6]
             defect = 1-q_quality
             dLdqdef = gamma*theta*max(defect, 1e-8)**(theta-1)
             dLdqquality = -dLdqdef
