@@ -1,0 +1,2 @@
+﻿test,n,quintiles,J_stat,permutation_p,direction,interpretation
+A17 prior quintile -> A18 text length,2319,5,2138000.0,1.0,increasing,exploratory text-length ordering check; not a quality label

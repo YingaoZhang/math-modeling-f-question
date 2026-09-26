@@ -15,12 +15,10 @@ from .q3_data import Q3Inputs
 ETA_ATTN = 2.0e-4
 # D is represented in billion tokens and the reported budget in 1e21 FLOPs.
 # Thus D_tokens * delta_g / 1e21 = D_billion * delta_g * 1e-12.
-# Quality cost is calibrated in 1e21-FLOP per billion training tokens at a
-# unit normalized cleaning increment.  The old literal 1e-12 conversion made
-# this term numerically invisible and forced Q to its upper bound.
-# Calibrated so cleaning expenditure is comparable with a training-cost
-# increment on the 1e21 FLOP budget grid; sensitivity is reported in Q3.
-QUALITY_COST_SCALE = 3.0
+# Appendix-B quality costs are FLOPs per token.  With D measured in billion
+# tokens and budgets in 1e21 FLOPs, the exact conversion is 1e-12.
+# No extra normalization or fitted multiplier is introduced.
+QUALITY_COST_SCALE = 1.0
 MIX_EFFECT_SCALE = 0.08
 MIX_KL_PENALTY = 0.03
 Q_UPPER = 0.99
@@ -54,15 +52,24 @@ class CostFunction:
         value = (self.raw(q) - self.raw(q0)) / denom
         return np.maximum(np.asarray(value, dtype=float), 0.0)
 
-    def absolute_increment_1e21(self, q: np.ndarray | float, q0: float) -> np.ndarray:
-        """Return a dimensionless normalized cleaning increment.
+    def raw_derivative(self, q: np.ndarray | float) -> np.ndarray:
+        q = np.asarray(q, dtype=float)
+        if self.kind == "exponential":
+            return self.gamma * self.lam * np.exp(self.lam * q)
+        if self.kind == "power":
+            return self.gamma * self.lam * np.power(q, self.lam - 1.0)
+        if self.kind == "logarithmic":
+            return self.gamma * self.lam / (1.0 + self.lam * q)
+        raise ValueError(self.kind)
 
-        Raw Appendix-B cost functions have arbitrary calibration constants;
-        the optimization therefore uses their increment relative to the full
-        ``q0 -> 1`` range and exposes the hardware calibration through
-        ``QUALITY_COST_SCALE``.
-        """
-        return self.relative_increment(q, q0)
+    def absolute_derivative_1e21(self, q: np.ndarray | float, q0: float) -> np.ndarray:
+        """Analytic derivative of the quality cost increment in 1e21 FLOPs."""
+        q = np.asarray(q, dtype=float)
+        return np.where(q > q0, self.raw_derivative(q), 0.0) * 1.0e-12
+
+    def absolute_increment_1e21(self, q: np.ndarray | float, q0: float) -> np.ndarray:
+        """Return the Appendix-B increment converted to 1e21 FLOPs per B token."""
+        return np.maximum(np.asarray(self.raw(q) - self.raw(q0), dtype=float), 0.0) * 1.0e-12
 
 
 COST_FUNCTIONS = (

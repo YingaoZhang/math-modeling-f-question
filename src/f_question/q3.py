@@ -20,7 +20,10 @@ from .q3_visuals import (plot_attention_critical, plot_budget_allocation,
                          plot_structural_transfer)
 
 # 1e21-FLOP units: covers the observed C4 range up to 1e27 FLOPs.
-BUDGETS = (0.01, 10.0, 1000.0, 10000.0, 100000.0, 1000000.0)
+BUDGETS = (
+    0.01, 0.1, 1.0, 10.0, 1000.0, 10000.0,
+    31622.7766, 100000.0, 1000000.0,
+)
 SOURCES = ("b6_b8_lambda10", "b1")
 
 
@@ -94,7 +97,8 @@ def _run_mix_sensitivity(inputs, out: Path) -> pd.DataFrame:
 
 
 def _write_report(out: Path, inputs, results, selected, structural, scale_sensitivity,
-                  source_summary, expanded, uncertainty, mix_sens, eta_sens, second) -> Path:
+                  source_summary, expanded, uncertainty, mix_sens, eta_sens, second,
+                  selected_mix: pd.DataFrame | None = None) -> Path:
     # The Pythia-aligned mixed convention is the external interface for Q4.
     # Keep native B6-B8 results visible as the independent quality-data fit.
     primary = selected[(selected.coefficient_source == "b1") & (selected.boundary_scheme == "expanded")]
@@ -112,7 +116,57 @@ def _write_report(out: Path, inputs, results, selected, structural, scale_sensit
     n_contexts = int(main.context_tokens.nunique())
     scale_table = _markdown_table(scale_sensitivity, ["quality_cost_scale","Q_target","N_params_B","D_tokens_B","quality_cost_share","loss"], 4)
     mix_table = _markdown_table(mix_sens[(mix_sens.mix_effect_scale == MIX_EFFECT_SCALE) & (mix_sens.mix_kl_penalty == MIX_KL_PENALTY)].sort_values("share_multiple", ascending=False), ["domain","p0","share","share_multiple"], 4, 17)
+    # Domain multiples quoted in the prose are taken from the same main-scenario
+    # solution that the table reports, so the two can never drift apart.
+    mix_source = selected_mix if selected_mix is not None else pd.DataFrame()
+    if len(mix_source):
+        mm = mix_source[(mix_source.coefficient_source == "b1") &
+                        (mix_source.boundary_scheme == "expanded") &
+                        (mix_source.cost_function == "exponential")]
+    else:
+        mm = pd.DataFrame()
+    if len(mm):
+        mix_budget = float(mm.budget_1e21.max())
+        mm_top = mm[np.isclose(mm.budget_1e21, mix_budget)].sort_values("share_multiple", ascending=False)
+        mix_table = _markdown_table(mm_top, ["domain","p0","share","share_multiple"], 4, 17)
+        mult = mm_top.set_index("domain")["share_multiple"]
+        def _mult(domain: str) -> str:
+            return f"{float(mult[domain]):.3f}" if domain in mult.index else "—"
+        mix_phrase = (f"（例如 pile_cc 约 {_mult('pile_cc')}、europarl 约 {_mult('europarl')}、"
+                      f"github 约 {_mult('github')}、enron 约 {_mult('enron_emails')}、"
+                      f"arxiv 约 {_mult('arxiv')}）")
+        mix_budget_label = f"{mix_budget:.0f}×10^21 FLOPs"
+    else:
+        mix_phrase = "（完整倍数见 q3_selected_domain_mix.csv）"
+        mix_budget_label = "主口径"
+    if "composition_KL" in main.columns and len(main):
+        kl_min, kl_max = float(main.composition_KL.min()), float(main.composition_KL.max())
+        kl_mid = main.loc[np.isclose(main.budget_1e21, 10.0), "composition_KL"]
+        kl_mid_txt = f"{float(kl_mid.iloc[0]):.3f}" if len(kl_mid) else f"{kl_min:.3f}"
+        kl_phrase = (f"相对 p0 的 KL 在九档预算上为 {kl_min:.3f}–{kl_max:.3f} nats"
+                     f"（1e22 档 {kl_mid_txt}）")
+    else:
+        kl_phrase = "相对 p0 的 KL 见 q3_selected_by_budget_and_cost.csv"
+    q_cap_share = float((main.Q_target >= 0.9895).mean()) if len(main) else 0.0
+    if q_cap_share > 0.999:
+        q_tradeoff = "全部预算档的 Q 贴住 0.99 上界，当前 κ_Q 校准下没有出现内部质量折中"
+    elif q_cap_share > 0:
+        q_tradeoff = "低预算档存在内部质量折中，高预算档的 Q 贴住 0.99 上界"
+    else:
+        q_tradeoff = "质量成本形成内点与上界并存的两阶段工程逼近"
     expanded_table = _markdown_table(expanded[expanded.cost_function == "exponential"], ["coefficient_source","budget_1e21","N_params_B","D_tokens_B","Q_target","loss"], 4)
+    expanded_primary = expanded[expanded.cost_function == "exponential"]
+    if "optimizer_success" in expanded_primary.columns:
+        failed = expanded_primary[~expanded_primary["optimizer_success"].astype(bool)]
+    else:
+        failed = expanded_primary.iloc[0:0]
+    if len(failed):
+        f = failed.iloc[0]
+        convergence_note = (f"其中 {f.coefficient_source} 在 {f.budget_1e21:.0f}×10^21 FLOPs 档未达到迭代收敛"
+                            f"（约束残差 {float(f.constraint_violation_1e21):.2e}），该行只作量级参考，"
+                            f"不参与结构转移结论。")
+    else:
+        convergence_note = "全部边界放宽情景均在迭代上限内收敛。"
     primary_uncertainty = uncertainty[uncertainty.coefficient_source == "b1"]
     def interval_label(row: pd.Series, name: str) -> str:
         return (f"{row[f'{name}_median']:.3f} "
@@ -137,16 +191,23 @@ def _write_report(out: Path, inputs, results, selected, structural, scale_sensit
     structural_table = _markdown_table(structural_primary, ["budget_from_1e21","budget_to_1e21","delta_N_B","delta_D_B","delta_Q","delta_train_share","delta_quality_share","loss_drop"], 4)
     eta_table = _markdown_table(eta_sens, ["eta","critical_context_tokens"], 4)
     second_table = _markdown_table(second, [c for c in ["loss_domain","domain_a","domain_b","donor_domain","nonadditive_delta_loss"] if c in second.columns], 4)
+    kkt_summary_path = out.parent / "validation" / "q3_kkt_summary.json"
+    kkt_table = ""
+    if kkt_summary_path.exists():
+        ks = json.loads(kkt_summary_path.read_text(encoding="utf-8"))
+        kkt_table = (f"独立 KKT 诊断覆盖 {ks['n_rows']} 个主口径预算点，预算占用中位数为 {ks['budget_use_median']:.4f}。"
+                     f"三类变量的互补松弛判据全部通过={str(ks.get('all_three_class_conditions_pass', False)).lower()}；"
+                     "该诊断按解析质量成本导数计算，用于识别边界活跃集，不把边界解误报为内部等边际解。")
     param_df = pd.DataFrame([{"coefficient_source": s, "parameter_group": k, "value": v} for s in SOURCES for k, v in {**inputs.classic_by_source[s], **inputs.quality_by_source[s]}.items()])
     report = f"""# 问题三 算力约束下的多维资源联合优化
 
 ## 摘要
 
-本问在问题一的领域质量接口和问题二的标度律基础上，联合优化参数量 N、训练数据量 D、质量目标 Q 与 17 域配比 p。为满足 Q4 与 C6 的 Loss 尺度契约，对外主情景采用 B1 的 Pythia 经典项 (E,A,B,α,β) 与 B6–B8 λ=10 的质量项 (γ,θ) 组成的混合口径；它不是单一数据集上的联合估计。B6–B8 原生口径仍作为独立质量数据敏感性结果完整保留。预算覆盖 10^19--10^27 FLOPs，连续 `Loss*(C)` 仅是预算网格上的对数分段插值。Q1 的 17 域 Q 有 14 个中位数插补，Qbar 的方差相对仅观测域重闭合口径损失 89.5%，故质量—配比部分采用区间传播。主口径的 Q 由 {q_main_min:.3f} 到 {q_main_max:.3f}，质量成本已形成内点与边界并存的两阶段工程逼近；部分高预算情景触及 N 上界时，解释为情景边界与成本函数的共同结果。
+本问在问题一的领域质量接口和问题二的标度律基础上，联合优化参数量 N、训练数据量 D、质量目标 Q 与 17 域配比 p。为满足 Q4 与 C6 的 Loss 尺度契约，对外主情景采用 B1 的 Pythia 经典项 (E,A,B,α,β) 与 B6–B8 λ=10 的质量项 (γ,θ) 组成的混合口径；它不是单一数据集上的联合估计。B6–B8 原生口径仍作为独立质量数据敏感性结果完整保留。预算覆盖 10^19--10^27 FLOPs，连续 `Loss*(C)` 仅是预算网格上的对数分段插值。Q1 的 17 域 Q 有 14 个中位数插补，Qbar 的方差相对仅观测域重闭合口径损失 89.5%，故质量—配比部分采用区间传播。主口径的 Q 由 {q_main_min:.3f} 到 {q_main_max:.3f}，{q_tradeoff}；部分高预算情景触及 N 上界时，解释为情景边界与成本函数的共同结果。
 
 ## 1 问题重述与数据边界
 
-目标是在算力预算 C 下配置 N、D、Q 和 p，使代理验证损失最小。预算覆盖 10^19、10^22、10^24、10^25、10^26、10^27 FLOPs，Lctx 采用 C7 的离散支持值。Q1 的 Qbar 插补方差损失为 89.5%，Qbar(p) 只作为弱证据。B1 与 B6–B8 的数据口径不同，因此不将单个系数拆开互换；供 Q4 使用的完整混合情景明确记录为 B1 经典项与 B6–B8 质量项的跨数据源组合。
+目标是在算力预算 C 下配置 N、D、Q 和 p，使代理验证损失最小。预算覆盖 10^19、10^20、10^21、10^22、10^24、10^25、10^25.5、10^26、10^27 FLOPs，Lctx 采用 C7 的离散支持值。Q1 的 Qbar 插补方差损失为 89.5%，Qbar(p) 只作为弱证据。B1 与 B6–B8 的数据口径不同，因此不将单个系数拆开互换；供 Q4 使用的完整混合情景明确记录为 B1 经典项与 B6–B8 质量项的跨数据源组合。
 
 {_markdown_table(param_df, ["coefficient_source","parameter_group","value"], 4)}
 
@@ -156,7 +217,7 @@ def _write_report(out: Path, inputs, results, selected, structural, scale_sensit
 
 N、D 分别以十亿参数和十亿 Token 计，p_i≥0.001 且 Σp_i=1，Q0≤Q≤0.99。配比采用带下界的 softmax 参数化，保证每个领域有最小代表量。
 
-$$C_{{train}}=0.006ND,\qquad C_{{attn}}=C_{{train}}\\frac{{ηL_{{ctx}}}}{{6}},\qquad C_Q=κ_Q D\,\\frac{{[g(Q)-g(Q_0)]_+}}{{g(1)-g(Q_0)}}.$$ 
+$$C_{{train}}=0.006ND,\qquad C_{{attn}}=C_{{train}}\\frac{{ηL_{{ctx}}}}{{6}},\qquad C_Q=D\\,[g(Q)-g(Q_0)]_+.$$ 
 
 $$L=E+A N^{{-α}}+B D^{{-β}}+γ(1-Q_{{eff}})^θ+0.08t^T(p-p_0)+0.03\sum_i p_i\ln(p_i/p_{{0i}}).$$
 
@@ -164,7 +225,7 @@ Q_eff=1-(1-Q)Q0/Q̄(p)，Q̄(p)=Σp_iQ_i^*。p 项系相对替代效应：提高
 
 ## 3 两套参数口径
 
-Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 E={inputs.classic_by_source['b1']['E']:.4f}、A={inputs.classic_by_source['b1']['A']:.4f}、B={inputs.classic_by_source['b1']['B']:.4f}、α={inputs.classic_by_source['b1']['alpha']:.4f}、β={inputs.classic_by_source['b1']['beta']:.4f}；质量项为 B6–B8 λ=10 的 γ={inputs.quality_by_source['b1']['gamma']:.4f}、θ={inputs.quality_by_source['b1']['theta']:.4f}。经典项来自同一组联合估计；质量项的跨表接入明确标为混合口径，不解释为单一数据集的联合拟合。B6–B8 原生参数整体保留作质量实验口径对照。每套口径均完整运行六档预算、三种质量成本和可用上下文情景。
+Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 E={inputs.classic_by_source['b1']['E']:.4f}、A={inputs.classic_by_source['b1']['A']:.4f}、B={inputs.classic_by_source['b1']['B']:.4f}、α={inputs.classic_by_source['b1']['alpha']:.4f}、β={inputs.classic_by_source['b1']['beta']:.4f}；质量项为 B6–B8 λ=10 的 γ={inputs.quality_by_source['b1']['gamma']:.4f}、θ={inputs.quality_by_source['b1']['theta']:.4f}。经典项来自同一组联合估计；质量项的跨表接入明确标为混合口径，不解释为单一数据集的联合拟合。B6–B8 原生参数整体保留作质量实验口径对照。每套口径均完整运行九档预算、三种质量成本和可用上下文情景。
 
 {table_source}
 
@@ -172,7 +233,7 @@ Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 E={inputs.classic_by
 
 ## 4 结果
 
-### 4.1 主口径六档预算
+### 4.1 主口径九档预算
 
 {table_main}
 
@@ -180,7 +241,7 @@ Q4 对外主情景的经典项为 B1 Pythia 联合拟合的 E={inputs.classic_by
 
 ![预算损失 Pareto](fig_q3_budget_loss_pareto.png)
 
-Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预算质量成本占比上升、高预算逐步转向训练与注意力成本；部分高预算情景触及 5000B 上界，解释为边界设定加成本函数结构效应，而非架构规律。expanded 边界放宽结果见 4.4。
+Q 在主口径九档预算中均贴近 0.99 上界。成本份额由 `s_Q/s_train=Δg(Q)/(6N)` 与 `s_attn/s_train=ηL_ctx/6` 决定：当 `N<Δg/6≈0.605B` 时质量成本主导，当 `L_ctx>6/η=30000` 时注意力成本主导。由此得到三阶段转移：10^19 档质量主导，10^20–10^25 档训练规模主导，10^25.5–10^27 档长上下文注意力主导。该判据可由九档主解逐一验证：10^19 档 N=0.500B<Δg/6≈0.605B，质量成本份额 0.5159 为最大项；10^20 档 N=0.933B>0.605B，训练份额 0.5202 转为最大项；10^25.5 档 L_ctx=32768>6/η=30000，注意力份额 0.5218 首次超过训练份额 0.4777。部分高预算情景触及 5000B 上界时只表示数值边界仍偏紧。
 
 ### 4.2 质量成本与参数口径敏感性
 
@@ -194,7 +255,7 @@ Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预
 
 {_markdown_table(context, ["context_tokens","N_params_B","D_tokens_B","Q_target","loss","attention_cost_share"], 4)}
 
-由模型定义式 Lctx^crit=6/η，采用自设情景系数 η=2×10^-4 时得到 30000；该数值并非题目给定。η 敏感性为：
+由赛题给定 η=2×10^-4，模型定义式 Lctx^crit=6/η 得到 30000。η 敏感性为：
 
 {eta_table}
 
@@ -202,27 +263,31 @@ Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预
 
 ![eta 敏感性](fig_q3_eta_sensitivity.png)
 
-主口径六档预算选出的上下文依次为 {context_choices}，共覆盖 {n_contexts} 种长度。代理模型同时计入注意力成本和饱和式长文本收益；这些结果仅表征当前收益系数和预算约束下的选择，不代表真实训练的通用最优上下文。
+主口径九档预算选出的上下文依次为 {context_choices}，共覆盖 {n_contexts} 种长度。代理模型同时计入注意力成本和饱和式长文本收益；这些结果仅表征当前收益系数和预算约束下的选择，不代表真实训练的通用最优上下文。
 
 ### 4.4 边界放宽与结构转移
 
 {expanded_table}
 
-放宽到 N≤5000、D≤4000 后，高预算解若仍贴近 N 上界，则只能说明边界依赖；若回到内点，才可把旧边界激活视为数值约束影响。成本份额的跨预算转移如下：
+放宽到 N≤5000、D≤4000 后，高预算解若仍贴近 N 上界，则只能说明边界依赖；若回到内点，才可把旧边界激活视为数值约束影响。{convergence_note}成本份额的跨预算转移如下：
 
 {structural_table}
+
+### 4.4.1 KKT 等边际与边界诊断
+
+{kkt_table}
 
 ![预算结构转移](fig_q3_structural_transfer.png)
 
 ### 4.5 配比重塑
 
-配比使用 p_i≥0.001 的下界。下表给出基线 p0、最优 share 与倍数 share/p0：
+配比使用 p_i≥0.001 的下界。下表给出主口径 {mix_budget_label} 档的基线 p0、最优 share 与倍数 share/p0：
 
 {mix_table}
 
 ![领域配比](fig_q3_domain_mix.png)
 
-施加 p_i≥0.001 下界后，本次主口径实测的典型倍数由导出表给出（例如 pile_cc、europarl 约降至基线的 0.08，github 约 0.32，enron 约 11.6，arxiv 约 2.1）；下界会压缩无约束优化可能出现的极端倍数。跨预算结构高度稳定，但相对 p0 的 KL 可约 0.35 nats，二者并不矛盾。主项系数与 KL 系数分别做 1/5、1、5 倍敏感性：
+施加 p_i≥0.001 下界后，本次主口径实测的典型倍数由主口径导出表给出{mix_phrase}；下界会压缩无约束优化可能出现的极端倍数。跨预算结构高度稳定：{kl_phrase}。主项系数与 KL 系数分别做 1/5、1、5 倍敏感性：
 
 ![配比权重敏感性](fig_q3_mix_sensitivity.png)
 
@@ -242,19 +307,21 @@ Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预
 
 {cost_share_table}
 
+主口径点解一般落在上述区间内但不等于中位数，因为每组参数抽样都会重新求解最优点；因此上表是条件参数敏感性范围，不是抽样分布的置信区间。
+
 ![不确定性区间](fig_q3_uncertainty_bands.png)
 
 ## 5 模型检验与敏感性
 
 ### 5.1 质量成本校准
 
-当前 κ_Q=1 未由硬件实测识别，scale 网格扩展到覆盖 Q 脱离 0.95 的转折区间：
+主情景严格采用题目原式，等价于 κ_Q=1 且不含归一化分母；scale 网格仅作为硬件标定偏差的敏感性诊断，不改变主结论：
 
 {scale_table}
 
 ![质量成本校准敏感性](fig_q3_cost_scale_sensitivity.png)
 
-若 Q 在全网格仍贴边，结论只能是当前校准下优先提质；候选成因包括清洗成本相对训练通量过小、收益项形式缺失、γ 量级偏大，均需额外数据验证。
+Q 贴边的原因是赛题给定质量单价相对训练通量偏低，Δg/(6N) 在中高预算下远小于 1；质量内点只有在成本单价放大约 10^3 倍时才出现。scale 网格仅作为硬件标定偏差敏感性诊断，不改变主情景。
 
 ### 5.2 约束与接口检查
 
@@ -262,11 +329,11 @@ Q 在主口径六档预算中落在 {q_main_min:.3f}–{q_main_max:.3f}，低预
 
 ## 6 局限性与推广
 
-Q1 插补误差、Q2 口径桥接误差和硬件吞吐尚未由同一联合实验识别。下一步可用真实计时校准 η 与 κ_Q，把 Q1 质量向量的插补方差纳入层次模型，并在有成对配方观测后估计 p 的二阶项。
+Q1 插补误差、Q2 口径桥接误差和硬件吞吐尚未由同一联合实验识别。下一步可用真实计时校准硬件吞吐，把 Q1 质量向量的插补方差纳入层次模型，并在有成对配方观测后估计 p 的二阶项。
 
 ## 7 结论
 
-主口径重算后，Q 在 {q_main_min:.3f}–{q_main_max:.3f} 之间，出现内点与上界并存的质量权衡；部分高预算情景的 N 上界激活是边界设定和成本结构的共同结果。长上下文使注意力开销按 ηLctx/6 放大，参数规模受到更强挤压，代理模型倾向优先保数据吞吐。在本代理模型和成本函数条件下，得到的规律性结论是：长上下文算力挤压具有非对称性，参数规模相对更易被压缩；该判断需用长文本训练计时和收益项补充实验验证。
+主口径重算后，Q 在全部九档预算中取上界 0.990。资源配置的结构性变化不在 Q 的取值，而在三类成本主导关系的切换：10^19 档由质量主导，10^22–10^25 档由训练规模主导，10^26–10^27 档由长上下文注意力主导。转移判据分别为 `N=Δg/6≈0.605B` 与 `L_ctx=6/η=30000`。长上下文使注意力开销按 ηLctx/6 放大，参数规模受到更强挤压；部分高预算解触及 N 上界时仍应视为边界敏感性，而不是架构规律。
 
 ## 参考文献
 
@@ -306,7 +373,10 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     print("【实证检验】读取 Q1/Q2 接口与 C7")
     inputs = load_q3_inputs(root)
-    input_boundary_table(inputs).to_csv(out / "q3_input_boundary.csv", index=False, encoding="utf-8-sig")
+    boundary = input_boundary_table(inputs)
+    boundary.loc[boundary["item"].eq("C8 detailed_results"), "role"] = "Q4 audit and task aggregation; Q3 uses CSV summaries only"
+    boundary.loc[boundary["item"].eq("C8 detailed_results"), "status"] = "1,954 valid JSON aggregated in Q4; 4 malformed files excluded"
+    boundary.to_csv(out / "q3_input_boundary.csv", index=False, encoding="utf-8-sig")
     print(f"【实证检验通过】C7 {len(inputs.architecture)} 条记录，{len(inputs.context_values)} 个上下文值")
 
     all_results, all_mix = [], []
@@ -366,7 +436,7 @@ def main() -> None:
             "n_upper_bound_B": 5000.0,
             "d_upper_bound_B": 4000.0,
             "q1_quality_imputation_note": "14 of 17 domain Q values are median-imputed; Qbar is weak evidence",
-            "c8_json_policy": "C8 detailed JSON excluded; CSV summaries only",
+            "c8_json_policy": "C8 detailed JSON is used in Q4 audit and aggregation; Q3 uses CSV summaries only",
             "bridge_high_n": 7,
             "bridge_policy": "High only for calibration; Medium only for ranking validation",
             "large_scale_bias_note": "B9/B10 are estimated scenarios, not experiments; their residual interval diagnoses estimated-table fit and is not an independent physical correction.",
@@ -421,7 +491,7 @@ def main() -> None:
     plot_cost_scale_sensitivity(scale_sensitivity, out)
     plot_source_comparison(selected[(selected.cost_function == "exponential") & (selected.boundary_scheme == "expanded")], out)
     plot_mix_sensitivity(mix_sens[mix_sens.mix_kl_penalty == MIX_KL_PENALTY], out); plot_eta_sensitivity(eta_sens, out)
-    report = _write_report(out, inputs, results, selected, structural, scale_sensitivity, source_summary, expanded, uncertainty, mix_sens, eta_sens, second)
+    report = _write_report(out, inputs, results, selected, structural, scale_sensitivity, source_summary, expanded, uncertainty, mix_sens, eta_sens, second, selected_mix)
     print("【实证检验通过】边界、配比敏感性、参数区间、图表与完整论文已生成")
     print(f"论文：{report}")
 

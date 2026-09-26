@@ -7,7 +7,7 @@
   "n_upper_bound_B": 5000.0,
   "d_upper_bound_B": 4000.0,
   "q1_quality_imputation_note": "14 of 17 domain Q values are median-imputed; Qbar is weak evidence",
-  "c8_json_policy": "C8 detailed JSON excluded; CSV summaries only",
+  "c8_json_policy": "C8 detailed JSON is used in Q4 audit and aggregation; Q3 uses CSV summaries only",
   "bridge_high_n": 7,
   "bridge_policy": "High only for calibration; Medium only for ranking validation",
   "large_scale_bias_note": "B9/B10 are estimated scenarios, not experiments; their residual interval diagnoses estimated-table fit and is not an independent physical correction.",

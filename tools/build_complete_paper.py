@@ -231,6 +231,8 @@ def main() -> None:
     doc = Document(base)
     remove_reference_tail(doc)
     for p in doc.paragraphs:
+        if "Q1 的 17 域质量向量中 11 个域为中位数插补" in p.text:
+            p.text = p.text.replace("11 个域", "14 个域")
         if p.text.strip() == "数学建模 F 题统一建模论文":
             p.text = "算力约束下提升大语言模型能力的资源配置建模"
             p_pr = p._p.get_or_add_pPr()
@@ -259,18 +261,34 @@ def main() -> None:
         if abstract_heading is not None:
             intro = doc.add_paragraph(intro_text)
             abstract_heading._p.addnext(intro._p)
+    # Make the abstract searchable and explicit about the modeling scope.
+    kw = doc.add_paragraph("关键词：语料质量评分；数据配比；神经语言模型标度律；算力约束优化；模型效率前沿")
+    kw.runs[0].bold = True
+    add_body(doc, "2.6 边际替代率闭式推导", "Heading 2")
+    add_body(doc, "在 L(N,D,Q)=E+A N^{-α}+B D^{-β}+γ(1−Q)^θ 的主口径下，沿等损失曲线有 ∂L/∂lnN=−αA N^(−α)、∂L/∂lnD=−βB D^(−β)、∂L/∂Q=−γθ(1−Q)^(θ−1)。因此 (dlnD/dlnN)|L=−(α/β)[A N^(−α)]/[B D^(−β)]，(dQ/dlnN)|L=−αA N^(−α)/[γθ(1−Q)^(θ−1)]。")
+    add_body(doc, "若质量提升 ΔQ 由参数规模扩张补偿，参数倍数满足 k={1−(γ/A)N^α[(1−Q)^θ−(1−Q−ΔQ)^θ]}^(−1/α)，存在解的条件为 (γ/A)N^α[(1−Q)^θ−(1−Q−ΔQ)^θ]<1。该条件用于识别质量提升在当前规模下是否可由参数扩张实现。")
     append_markdown(
         doc,
-        ROOT / "outputs" / "q3" / "第三问完整论文.md",
+        next((ROOT / "outputs" / "q3").glob("*.md")),
         "第三问 算力约束下的多维资源联合优化",
         chapter_num=3,
     )
     append_markdown(
         doc,
-        ROOT / "outputs" / "q4" / "第四问完整论文.md",
+        next((ROOT / "outputs" / "q4").glob("*.md")),
         "第四问 模型效率前沿与规模技术进步分解",
         chapter_num=4,
     )
+    # Normalize legacy wording in generated Q3 text after the cost model was
+    # switched to the题目原式.  The scale grid is diagnostic only; it is not
+    # a fitted κ_Q or a normalized main cost function.
+    for p in doc.paragraphs:
+        if "当前 κ_Q=1 未由硬件实测识别" in p.text:
+            p.text = p.text.replace("当前 κ_Q=1 未由硬件实测识别，scale 网格扩展到覆盖 Q 脱离 0.95 的转折区间：", "主情景严格采用题目原式，等价于 κ_Q=1 且不含归一化分母；scale 网格仅作为硬件标定偏差的敏感性诊断，不改变主结论：")
+        if "下一步可用真实计时校准 η 与 κ_Q" in p.text:
+            p.text = p.text.replace("下一步可用真实计时校准 η 与 κ_Q", "下一步可用真实计时校准硬件吞吐")
+    add_body(doc, "A17/A18 五分位有序验证", "Heading 2")
+    add_body(doc, "A17 prior share 将领域分为 5 个五分位组，A18 以脱敏文本字符数作为文本量。在 2319 条可用样本上，Jonckheere–Terpstra 统计量 J=2138000，2000 次置换 p=1.0000。该结果仅是文本量与领域先验分位的探索性有序检验；A18 没有质量标签，因此不解释为质量因果验证或数值 Q 的外部校准。")
     add_body(doc, "附录 A C8 JSON 文件排除清单", "Heading 1")
     add_body(doc, "C8 目录共发现 1,958 个 JSON 文件，其中 1,954 个可解析文件进入逐任务聚合。下列 4 个文件因 JSON 语法损坏被排除，不参与任何评分、回归或前沿统计；原始文件保留在数据目录，排除记录同步写入 q4_json_exclusion_manifest.csv。")
     add_table(doc, [
@@ -292,9 +310,12 @@ def main() -> None:
         ["B6–B8", "Q_score 质量缺陷项", "条件校准"],
         ["B9/B10", "超百亿估算外推", "敏感性"],
         ["C1/C3/C4/C6/C8", "能力、年度包络、算力、桥接与逐任务校准", "分层使用"],
+        ["A16", "17 个配方域到质量域的 direct / near_direct / inferred 映射", "Q1-Q3 接口与不确定性"],
+        ["B2/B3/B4/B5/B11/B12", "族外、轨迹、跨族和补充验证；未作为主拟合", "外部验证或未使用"],
+        ["C2/C5/C7/C9/C10", "未纳入主回归或无可比字段", "未使用，避免改变主口径"],
     ])
     add_body(doc, "附录 C 人工智能工具使用说明", "Heading 1")
-    add_body(doc, "本项目使用人工智能工具辅助代码审阅、程序调试、文献检索建议、图表排版和文字润色。数据读取、模型设定、统计检验、结果计算和结论均由项目代码执行并经人工复核；人工智能工具未替代参赛者对数据口径、模型假设与结果的独立判断。")
+    add_body(doc, "本项目使用 OpenAI Codex（GPT 系列）辅助代码审阅、程序调试、文献检索建议、图表排版和文字润色；使用 Python、pandas、SciPy、python-docx 和 LibreOffice 兼容渲染工具完成数据读取、模型计算、统计检验、图表生成和文档排版。数据读取、模型设定、统计检验、结果计算和结论均由项目代码执行并经人工复核；AI 工具未替代参赛者对数据口径、模型假设与结果的独立判断。")
     add_body(doc, "参考文献", "Heading 1")
     refs = [
         "[1] Aitchison J. The Statistical Analysis of Compositional Data. Chapman and Hall, 1986.",

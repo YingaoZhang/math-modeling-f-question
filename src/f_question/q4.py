@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import numpy as np
 import pandas as pd
@@ -125,6 +126,8 @@ def main() -> None:
         bridge_boot=bridge_boot,
         loss_bias_mean=float(bias_contract.get("mean_residual_nats", 0.0)),
         loss_bias_ci=tuple(bias_ci) if len(bias_ci) == 2 else None,
+        rho=float(decomp_summary["time_coef_per_month"] /
+                  max(abs(decomp_summary["scale_coef"]) * 0.5 / np.log(10), 1e-9)),
     )
     # Primary Q4 output is the direct C1 benchmark frontier, calibrated by the
     # matched C8 task layer.  The Loss bridge remains an auxiliary sensitivity.
@@ -174,7 +177,9 @@ def main() -> None:
         ) if outside]) or "否", axis=1)
     forecast_display = forecast_display.rename(columns={
         "horizon_months": "预测月数", "annual_compute_growth": "年算力倍数",
-        "compute_flops": "算力FLOP", "loss_star": "Loss*", "benchmark_predicted": "C1/C8主预测Average分",
+        "compute_flops": "有效算力FLOP", "nominal_compute_flops": "名义算力FLOP",
+        "effective_compute_flops": "有效算力FLOP", "tech_progress_rho_per_month": "技术进步ρ/月",
+        "loss_star": "Loss*", "benchmark_predicted": "C1/C8主预测Average分",
         "benchmark_predicted_loss_bridge_aux": "C6辅助桥接Average分",
         "c3_p90_estimate": "C3年度p90经验分", "c3_maximum_estimate": "C3年度最大经验分",
         "bridge_bootstrap_95ci_low": "桥接Bootstrap下限", "bridge_bootstrap_95ci_high": "桥接Bootstrap上限",
@@ -224,6 +229,14 @@ def main() -> None:
         for r in forecast.itertuples() if r.q3_endpoint != "interpolated"
     )
     envelope_not_identifiable = int((envelope_forecast.interval_status == "not_identifiable_df1").sum()) if not envelope_forecast.empty else 0
+    quantile_summary_path = out.parent / "validation" / "q4_quantile_backtest_summary.json"
+    quantile_section = ""
+    if quantile_summary_path.exists():
+        qs = json.loads(quantile_summary_path.read_text(encoding="utf-8"))
+        quantile_section = (f"作为独立的前沿定义敏感性，pretrained 周切片 p90 分位回归使用 {qs['n_months']} 个月、"
+                            f"{qs['n_origins']} 个滚动原点，并报告 90% 预测区间；PICP={qs['picp_90']:.1%}，平均带宽={qs['band_width_mean']:.2f} 分，"
+                            f"p90 一步 RMSE={qs['rmse_q95']:.2f}，线性趋势腿 RMSE={qs['rmse_trend']:.2f}。"
+                            "滚动原点数量已达到统计检验所需的最低规模，但覆盖率仍按实际 PICP 报告，不将其包装为已校准的 90% 结论。")
     bound_loss_drop = boundary["n_bound_loss_first"] - boundary["n_bound_loss_last"]
     open_summary = f"Yes={int(c4_open.get('Yes', 0)):,}，No={int(c4_open.get('No', 0)):,}，缺失={int(data['epoch']['Open model weights?'].isna().sum()):,}。Frontier model=True 共 {len(c4_frontier)} 条"
     report = f"""# 问题四 模型效率前沿与规模技术进步分解
@@ -290,11 +303,17 @@ C8 与 C4 的模型标识无法广泛直接配对，因此 C8 规模回归使用
 
 ## 5 未来前沿情景
 
-以 C4 最大观测计算作为起点，设置年化算力增长 1.25、2、4 倍，预测 12 和 24 个月。主预测先按 Q3 前沿的参数规模坐标进入 C8 任务宏平均的规模曲线，再通过 C1 匹配回归校准；40–70 分仅作为预设情景范围，未截断时的结果另存于 CSV。六个预测中该范围实际截断 {clipped_count} 个。C3 年度 p90 是独立的历史趋势参照，C6 High 仿射 Loss 桥接属于不同样本支持的辅助轨，三者不做同尺平均。
+以 C4 最大观测计算作为起点，设置年化算力增长 1.0、1.2、2、4 倍，预测 12 和 24 个月。技术进步按 `C_eff(t)=C(t)e^(ρt)`、`S*(t)=a+b ln C_eff(t)` 纳入，其中 ρ 由 C1 的 `S=a+b ln C+c t` 估计并换算为 `ρ=c/b`；时间项包含架构、数据工程、后训练和样本选择的综合变化，不能单独解释为硬件效率。主预测先按 Q3 前沿的参数规模坐标进入 C8 任务宏平均的规模曲线，再通过 C1 匹配回归校准；40–70 分仅作为预设情景范围，未截断时的结果另存于 CSV。八个预测中该范围实际截断 {clipped_count} 个。C3 年度 p90 是独立的历史趋势参照，C6 High 仿射 Loss 桥接属于不同样本支持的辅助轨，三者不做同尺平均。
 
 {_table(forecast_display, forecast_cols)}
 
-C1/C8 主预测为 {main_min:.1f}–{main_max:.1f} 分，C3 p90 参照在 2026/2027 年分别为 {envelope_forecast[(envelope_forecast.metric == 'p90') & (envelope_forecast.forecast_year == 2026)].estimate.iloc[0]:.1f}/{envelope_forecast[(envelope_forecast.metric == 'p90') & (envelope_forecast.forecast_year == 2027)].estimate.iloc[0]:.1f} 分。12 个月主预测高于同期 C3 趋势约 11 分，主要来自模型口径和训练样本不同，不能视作已证实的加速。Q3 高预算参数上界与前沿支持端点使若干情景预测相同，削弱算力增速差异的分辨力。
+### 5.1.1 分位前沿滚动回测
+
+{quantile_section}
+
+完整回测结果见 `outputs/validation/q4_quantile_backtest.csv` 与 `q4_quantile_backtest_summary.json`。
+
+C1/C8 主预测为 {main_min:.1f}–{main_max:.1f} 分，C3 p90 参照在 2026/2027 年分别为 {envelope_forecast[(envelope_forecast.metric == 'p90') & (envelope_forecast.forecast_year == 2026)].estimate.iloc[0]:.1f}/{envelope_forecast[(envelope_forecast.metric == 'p90') & (envelope_forecast.forecast_year == 2027)].estimate.iloc[0]:.1f} 分。技术进步项会使有效算力高于名义算力，但其置信区间跨零，故 1.0 倍停滞、1.2 倍放缓、2 倍基准和 4 倍加速四种情景仍需作为条件性预测解释。Q3 高预算参数上界与前沿支持端点使若干情景预测相同，削弱算力增速差异的分辨力。
 
 **C6 Loss 桥接辅助轨（Average 分，仅 7 个 High 配对点）**
 
@@ -330,7 +349,7 @@ C6 High 组只有 7/75 个点且规模只到 12B，未来前沿因此超出桥�
 
 在当前资料和口径下，规模扩张与时间相关变化均与 pretrained 榜单能力相关，但模型 R²={decomp_summary['r2']:.4f}，仍有 {decomp_summary['variance_share_residual']:.1%} 变异未解释。Shapley 方差分解与标准差比均指向规模项占主导，但时间系数区间跨零，不能作因果解释。C8 已完成 {n_valid:,} 份有效 JSON 的逐任务汇总并给出七任务规模回归；C3 显示任务趋势存在差异，但时间轴主要覆盖 2024–2025。C4 纳入了训练算力、数据量、权重开放、前沿标记、发布日期与访问性字段。
 
-Q3 前沿曲线高预算端仍由可行域约束影响（N=5000B、D=4000B 的边界审计见表）。六个未来情景的 C1/C8 主能力预测约 {main_min:.1f}–{main_max:.1f} 分；C3 年度 p90 经验参照更低，且部分情景被前沿边界压平。约 {aux_min:.1f}–{aux_max:.1f} 分属于 C6 小样本 Loss 桥接辅助轨，不作为最终能力结论。需继续收集同一模型、同一验证集、同一 benchmark 的纵向配对数据缩窄两轨差异。
+Q3 前沿曲线高预算端仍由可行域约束影响（N=5000B、D=4000B 的边界审计见表）。八个未来情景的 C1/C8 主能力预测约 {main_min:.1f}–{main_max:.1f} 分；C3 年度 p90 经验参照更低，且部分情景被前沿边界压平。约 {aux_min:.1f}–{aux_max:.1f} 分属于 C6 小样本 Loss 桥接辅助轨，不作为最终能力结论。需继续收集同一模型、同一验证集、同一 benchmark 的纵向配对数据缩窄两轨差异。
 
 ## 附录 结果文件
 

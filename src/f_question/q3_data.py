@@ -156,6 +156,6 @@ def input_boundary_table(inputs: Q3Inputs) -> pd.DataFrame:
          "n": 1, "status": "Pythia fit; B1 classic + B6-B8 quality is explicitly mixed"},
         {"item": "A4 training recipe mean", "role": "baseline simplex composition p0",
          "n": 512, "status": "real recipe table; row-closed before averaging"},
-        {"item": "C8 detailed_results", "role": "not used in Q3 or Q4",
-         "n": c8_count, "status": "all JSON excluded from modelling; CSV summaries only"},
+        {"item": "C8 detailed_results", "role": "Q4 per-model task aggregation; no role in Q3",
+         "n": c8_count, "status": "4 malformed files excluded; the parsed files feed Q4 task scores"},
     ])

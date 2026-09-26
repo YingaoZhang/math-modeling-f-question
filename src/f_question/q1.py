@@ -476,6 +476,16 @@ def write_report(q_summary, critic, entropy, metrics, model_compare):
     conflict_pairs = pd.read_csv(OUT / "conflict_pair_top10.csv")
     penalty = pd.read_csv(OUT / "conflict_penalty_sensitivity.csv")
     a18_examples = pd.read_csv(OUT / "A18_qualitative_text_examples.csv")
+    jt_path = OUT.parent / "validation" / "A17_A18_quintile_jt_validation.csv"
+    jt_summary_path = OUT.parent / "validation" / "A17_A18_quintile_summary.csv"
+    if jt_path.exists():
+        jt = pd.read_csv(jt_path).iloc[0]
+        jt_text = (f"补充的 A17/A18 五分位有序验证按 A17 prior share 将样本分为 {int(jt['quintiles'])} 组，"
+                   f"以 A18 脱敏文本字符数作为文本量，Jonckheere–Terpstra 统计量 J={jt['J_stat']:.0f}，"
+                   f"2000 次置换 p={jt['permutation_p']:.4f}。该检验只说明文本量在先验分位间的探索性有序关系，"
+                   "A18 没有质量标签，因此不把它解释为质量因果验证或数值 Q 的外部校准。")
+    else:
+        jt_text = "A17/A18 五分位有序验证结果将在验证输出生成后写入。"
     joint_effects = pd.read_csv(OUT / "mixture_joint_transfer_effects.csv") if (OUT / "mixture_joint_transfer_effects.csv").exists() else pd.DataFrame()
     extrap = pd.read_csv(OUT / "estimated_loss_ranking_reversal_summary.csv") if (OUT / "estimated_loss_ranking_reversal_summary.csv").exists() else pd.DataFrame()
     scaling = pd.read_csv(OUT / "scaling_est_reverse_engineering.csv") if (OUT / "scaling_est_reverse_engineering.csv").exists() else pd.DataFrame()
@@ -606,6 +616,8 @@ $$L_d = \\beta_{{0d}} + z^T\\beta_d + \\epsilon_d,\\qquad d=1,\\ldots,13.$$
 - A12–A15 与 A4–A5 的 63 个配方配置逐行相同；固定指数式在其上的评估是估算 Loss 的尺度诊断，不是新配方外推检验。
 - A2/A3 含有 A1 对应域记录，报告将全量结果用于题目要求的扩展对照，并另列去重非重叠估计；A2/A3 是扩展抽样而非独立外部验证。
 - A17 域摘要用于域先验。A18 原始文本样例覆盖 {len(a18_examples)} 个域，以下仅作定性构念核验；A18 不含 22 项质量信号，不能验证数值 Q，也不能作为冲突标签。
+
+{jt_text}
 
 {markdown_table(a18_examples[["domain", "sample_text_excerpt"]])}
 - 附件 A Loss 是 The Pile 验证集交叉熵；附件 B Pythia `val_loss` 是另一验证集的口径。没有共同样本或同模型、同检查点的配对 Loss，仿射/单调桥接不能从当前附件识别。附件 A Q 与 B 的 `Q_score` 也没有同文档配对，故不拟合重标定关系。本报告结果不作为第二问接口的已校准数值。

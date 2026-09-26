@@ -119,7 +119,7 @@ def main():
     paragraph(doc, "本文将四问的语料质量、成分配比、带不可约损失的标度律、资源配置和能力前沿置于明确的数据口径下讨论。质量维度总体同向；The Pile Loss 与 Pythia val_loss 分开标定；高预算前沿受可行域边界影响。")
 
     doc.add_heading("摘要", 1)
-    paragraph(doc, "第一问以 A1 全局 ECDF 将 22 个质量信号全部映射到 (0,1]，按教育、可读性、推理、清洁和结构五组等权构造文档质量分 Q，并以 CRITIC、熵权和长度加权作敏感性分析。A1 的逐域独立置换零分布均值约 55.7%，实测 A1、A2、A3 的域等权 P75/P25 冲突率为 42.6%、53.7%、47.9%，均处于零分布下侧；P90/P10 主口径下 A1 约 9.1%。因此质量维度总体同向，冲突只属少数情形；主接口采用 rho=0.25 的非零惩罚 Q*=clip(Q-rho C)，并保留全套敏感性。配比部分闭合到单纯形并用零值乘性替换和 Helmert ILR，13 个 Loss 域独立建模；线性 Ridge、二次交互和指数 Data Mixing Laws 的宏平均 R² 分别为 0.7641、0.8628 和 0.8688，CV 选型宏平均 R² 为 0.8896。")
+    paragraph(doc, "第一问以 A1 全局 ECDF 将 22 个质量信号全部映射到 (0,1]，按教育、可读性、推理、清洁和结构五组等权构造文档质量分 Q，并以 CRITIC、熵权和长度加权作敏感性分析。A1 的逐域独立置换零分布均值约 55.6%，实测 A1、A2、A3 的域等权 P75/P25 冲突率为 42.6%、53.7%、47.9%，均处于零分布下侧；P90/P10 主口径下 A1 约 9.1%。因此质量维度总体同向，冲突只属少数情形；主接口采用 rho=0.25 的非零惩罚 Q*=clip(Q-rho C)，并保留全套敏感性。配比部分闭合到单纯形并用零值乘性替换和 Helmert ILR，13 个 Loss 域独立建模；线性 Ridge、二次交互和指数 Data Mixing Laws 的宏平均 R² 分别为 0.7641、0.8628 和 0.8688，CV 选型宏平均 R² 为 0.8896。")
     paragraph(doc, "第二问以 B1 完整 N-D 网格拟合 L=E+A N^-alpha+B D^-beta，得到 E=1.6898、alpha=0.3400、beta=0.2799。B6--B8 的 Q_score 是与 Loss 同向的缺陷率，非对称质量项 gamma Q_score^theta 在质量趋于完美时归零。第三问沿用同一带稳态项的 B1 经典参数，并将跨表质量项完整标注为混合情景；第四问把 C1/C8 主预测与 C3 年度经验参照并列。")
 
     doc.add_heading("1 问题重述与数据边界", 1)
@@ -150,6 +150,9 @@ def main():
     paragraph(doc, "分类器诊断将 ModernBERT、FineWeb-Edu、Qurater 聚合为 G_model，将结构统计聚合为 G_struct，并以 G_noise=1-ad_en 表示清洁方向。arxiv 与 stackexchange 的高教育/高广告共现是风险证据，支持门控或降权，不足以在没有人工真值时宣称误判率。全部 22 指标直接聚合会显著提高尾部冲突率，说明五组语义聚合是稳健性而非唯一性选择，敏感性表见 conflict_all22_sensitivity.csv。")
     paragraph(doc, "Qbar(p)=sum_i p_i Q_i* 仅是跨域场景接口。中位数插补把 14 个域的质量设为同一值，导致 Qbar 方差相对只观测域重闭合口径降低 89.5%；因此在论文结论中降级为弱证据。")
     add_table(doc, pd.read_csv(Q1 / "qbar_imputation_variance_loss.csv"), digits=4, max_rows=3)
+    paragraph(doc, "为满足题目要求，补充报告 A1 与扩展集的域级 Q 对照。A2 的 arxiv 与 A1 的 arxiv 采用同一评分协议，A3 的 github 与 A1 的 github 采用同一评分协议；差异同时报告样本量和均值变化，不把扩展集当作独立重复实验。A16 的域映射用于扩大质量接口：arxiv、github、stackexchange 为 direct，wikipedia_en、gutenberg_pg_19、pile_cc 为 near_direct；其余域标为 inferred，并在问题三中作为不确定性来源。")
+    add_table(doc, pd.read_csv(Q1 / "q_A1_A2_A3_domain_comparison.csv").query("weighting == 'equal'"), digits=4, max_rows=6)
+    add_table(doc, pd.read_csv(ROOT / "data" / "raw" / "real_attachments" / "A_data_value" / "domain_mapping_guide.csv"), digits=3, max_rows=17)
 
     doc.add_heading("4 第一问 配比与逐域 Loss 模型", 1)
     paragraph(doc, "配比先行闭合，再做零值乘性替换 delta，并用 Helmert 正交基得到 z(p)。对 13 个有 Loss 的域分别拟合 L_d=beta_0d+z(p)^T beta_d、二次交互 Ridge 和 L_d=c_d+k_d exp(t_d^T p)。ILR 系数是对数对比，表示相对替代：提高某域比例必然从其他域挪出，不能理解为绝对效应。")
@@ -158,7 +161,7 @@ def main():
     paragraph(doc, "二次交互模型使用正则化并由交叉验证选择强度，样本只有 512 组配方，交互项只用于受约束的非加性诊断。65 条二阶差分来自独立检验集上的模型预测，不能拔高为实验观测的协同或互补机制。")
     add_figure(doc, Q1 / "loss_scatter_by_domain.png", "图 3 逐域预测值与实测 Loss")
     add_figure(doc, Q1 / "loss_residuals_by_domain.png", "图 4 逐域残差")
-    paragraph(doc, "A12--A15 的 63 个配方与训练配方重合，因而只能诊断估算数据的跨尺度排序和乘性生成结构，不能作为独立实验。反演得到 gamma(10B) 与 gamma(70B) 的 pooled Pearson r=0.9997，但 gamma 与 1M Loss 的相关为 0.3591，真实 1M 到 60M 对照为 -0.1563；因此不能把人工耦合 r>0.90 写成已证实规律。")
+    paragraph(doc, "A12--A15 的 63 个配方与训练配方重合，因而只能诊断估算数据的跨尺度排序和乘性生成结构，不能作为独立实验。无 Loss 的 nih_exporter、enron_emails、europarl、philpapers 保留在配比模型中，用于解释其对闭合配比和其他 Loss 域的相对替代影响，不虚构它们的独立 Loss 系数。列表型 qurater、dsir 等指标先在记录级按可用子指标取等权均值，再按 A1 全局 ECDF 统一方向；缺失子指标不填零。反演得到 gamma(10B) 与 gamma(70B) 的 pooled Pearson r=0.9997，但 gamma 与 1M Loss 的相关为 0.3591，真实 1M 到 60M 对照为 -0.1563；因此不能把人工耦合 r>0.90 写成已证实规律。")
     add_figure(doc, Q1 / "fig_est_gamma_coupling.png", "图 5 估算标度指数的耦合与真实对照")
 
     doc.add_heading("5 第二问 经典标度律与物理纠偏", 1)

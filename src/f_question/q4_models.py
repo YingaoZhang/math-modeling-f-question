@@ -223,10 +223,11 @@ def decompose_scale_vs_time(leaderboard: pd.DataFrame, n_boot: int = 2000,
 
 
 def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
-                      recent_compute: float, horizons=(12, 24), rates=(1.25, 2.0, 4.0),
+                      recent_compute: float, horizons=(12, 24), rates=(1.0, 1.2, 2.0, 4.0),
                       bridge_boot: pd.DataFrame | None = None,
                       loss_bias_mean: float = 0.0,
-                      loss_bias_ci: tuple[float, float] | None = None) -> pd.DataFrame:
+                      loss_bias_ci: tuple[float, float] | None = None,
+                      rho: float = 0.0) -> pd.DataFrame:
     """Translate Q3 Loss*(C) to benchmark scenarios with uncertainty labels.
 
     Bridge intervals come from resampling the small High-comparability set.
@@ -246,7 +247,14 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
     rows = []
     for h in horizons:
         for annual in rates:
-            c = recent_compute * annual ** (h/12)
+            # Effective compute includes time-dependent progress estimated as
+            # C_eff(t)=C(t) exp(rho*t); rho is calibrated from the C1
+            # scale/time regression and is set to zero when the estimate is
+            # unavailable. This separates hardware growth from algorithmic
+            # progress in the scenario table.
+            months = float(h)
+            c_nominal = recent_compute * annual ** (months/12)
+            c = c_nominal * np.exp(rho * months)
             clipped_c = float(np.clip(c, support_min, support_max))
             below = c < support_min * (1.0 - support_tol)
             above = c > support_max * (1.0 + support_tol)
@@ -282,7 +290,10 @@ def forecast_frontier(frontier: pd.DataFrame, bridge_summary: dict,
             bias_ci = loss_bias_ci or (loss_bias_mean, loss_bias_mean)
             biased_losses = loss + np.array([bias_ci[0], bias_ci[1]], dtype=float)
             bias_scores = bridge_summary["intercept"] + bridge_summary["slope"] * biased_losses
-            rows.append({"horizon_months": h, "annual_compute_growth": annual, "compute_flops": c,
+            rows.append({"horizon_months": h, "annual_compute_growth": annual,
+                         "nominal_compute_flops": c_nominal, "effective_compute_flops": c,
+                         "compute_flops": c,
+                         "tech_progress_rho_per_month": rho,
                          "loss_star": loss, "benchmark_predicted": score, "outside_q3_support": extrap,
                          "q3_support_min_flops": support_min, "q3_support_max_flops": support_max,
                          "q3_clipped_compute_flops": clipped_c,

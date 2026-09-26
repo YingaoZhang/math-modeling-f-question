@@ -3,4 +3,4 @@ C7 architecture metadata,context support and architecture context,45,real; 45 ro
 Q1 q2_input_interface_bundle,Q_star_17 and first-order substitution vector,17,derived interface; 14 Q values are median-imputed
 Q2 B1 fit coefficients,Pythia-compatible classic N-D loss proxy,1,Pythia fit; B1 classic + B6-B8 quality is explicitly mixed
 A4 training recipe mean,baseline simplex composition p0,512,real recipe table; row-closed before averaging
-C8 detailed_results,not used in Q3 or Q4,1958,all JSON excluded from modelling; CSV summaries only
+C8 detailed_results,Q4 audit and task aggregation; Q3 uses CSV summaries only,1958,"1,954 valid JSON aggregated in Q4; 4 malformed files excluded"
